@@ -1,0 +1,44 @@
+mutation CreatePublicTrip($userId: UUID!, $name: String!, $startDate: Date!, $endDate: Date!, $description: String) @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  trip_insert(data: {
+    userId: $userId,
+    name: $name,
+    startDate: $startDate,
+    endDate: $endDate,
+    isPublic: true,
+    description: $description
+  })
+}
+
+query GetPublicTrips @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  trips(where: {isPublic: {eq: true}}) {
+    id
+    name
+    startDate
+    endDate
+    description
+  }
+}
+
+mutation CreateActivityForDestination($destinationId: UUID!, $name: String!, $activityDate: Date!, $startTime: String, $endTime: String, $location: String, $description: String) @auth(level: USER) {
+  activity_insert(data: {
+    destinationId: $destinationId,
+    name: $name,
+    activityDate: $activityDate,
+    startTime: $startTime,
+    endTime: $endTime,
+    location: $location,
+    description: $description
+  })
+}
+
+query GetActivitiesForDestination($destinationId: UUID!) @auth(level: USER) {
+  activities(where: {destinationId: {eq: $destinationId}}) {
+    id
+    name
+    activityDate
+    startTime
+    endTime
+    location
+    description
+  }
+}

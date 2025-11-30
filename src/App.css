@@ -1,0 +1,93 @@
+/* Custom styles to complement Bootstrap */
+:root {
+  --airbnb-red: #FF385C;
+  --airbnb-red-dark: #E31C5F;
+}
+
+/* Remove default margins and prevent horizontal scroll */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Smooth transitions for hover effects */
+.hover-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Custom button hover effects */
+.btn-danger:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(255, 56, 92, 0.3);
+}
+
+/* Modal backdrop styling */
+.modal.show {
+  display: block;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+/* Dropdown menu positioning fix */
+.dropdown-menu.show {
+  display: block;
+}
+
+/* Remove default margins */
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+  
+.auth-container {
+  padding: 0;
+}
+
+/* Carousel Indicators - Circle Style */
+.carousel-indicators [data-bs-target] {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin: 0 6px;
+  background-color: rgba(255, 255, 255, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+.carousel-indicators .active {
+  width: 14px;
+  height: 14px;
+  background-color: #FF385C;
+  border-color: #FF385C;
+  transform: scale(1.1);
+}
+

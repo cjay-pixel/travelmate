@@ -1,0 +1,106 @@
+mutation CreateSeedData @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") @transaction {
+  user_insertMany(data: [
+    {
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      displayName: "demouser1",
+      createdAt: "2024-03-15T12:00:00Z",
+      email: "demouser1@example.com",
+      photoUrl: "https://example.com/demouser1.jpg"
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440001",
+      displayName: "demouser2",
+      createdAt: "2024-03-16T14:00:00Z",
+      email: "demouser2@example.com",
+      photoUrl: "https://example.com/demouser2.jpg"
+    }
+  ])
+  trip_insertMany(data: [
+    {
+      id: "650e8400-e29b-41d4-a716-446655440000",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      name: "Demo Trip 1",
+      description: "Example trip for demouser1",
+      startDate: "2024-04-01",
+      endDate: "2024-04-10",
+      createdAt: "2024-03-17T10:00:00Z",
+      isPublic: true
+    },
+    {
+      id: "650e8400-e29b-41d4-a716-446655440001",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      name: "Demo Trip 2",
+      description: "Another example trip for demouser2",
+      startDate: "2024-05-01",
+      endDate: "2024-05-15",
+      createdAt: "2024-03-18T09:00:00Z",
+      isPublic: false
+    }
+  ])
+  destination_insertMany(data: [
+    {
+      id: "750e8400-e29b-41d4-a716-446655440000",
+      tripId: "650e8400-e29b-41d4-a716-446655440000",
+      name: "Paris",
+      country: "France",
+      arrivalDate: "2024-04-02",
+      departureDate: "2024-04-05",
+      createdAt: "2024-03-19T11:00:00Z",
+      city: "Paris",
+      notes: "Eiffel Tower, Louvre Museum"
+    },
+    {
+      id: "750e8400-e29b-41d4-a716-446655440001",
+      tripId: "650e8400-e29b-41d4-a716-446655440001",
+      name: "Tokyo",
+      country: "Japan",
+      arrivalDate: "2024-05-03",
+      departureDate: "2024-05-07",
+      createdAt: "2024-03-20T15:00:00Z",
+      city: "Tokyo",
+      notes: "Shibuya Crossing, Tokyo Skytree"
+    }
+  ])
+  activity_insertMany(data: [
+    {
+      id: "850e8400-e29b-41d4-a716-446655440000",
+      destinationId: "750e8400-e29b-41d4-a716-446655440000",
+      name: "Eiffel Tower Visit",
+      description: "Visiting the Eiffel Tower",
+      activityDate: "2024-04-02",
+      createdAt: "2024-03-21T16:00:00Z",
+      location: "Eiffel Tower, Paris",
+      startTime: "10:00",
+      endTime: "12:00"
+    },
+    {
+      id: "850e8400-e29b-41d4-a716-446655440001",
+      destinationId: "750e8400-e29b-41d4-a716-446655440001",
+      name: "Shibuya Crossing",
+      description: "Experiencing Shibuya Crossing",
+      activityDate: "2024-05-03",
+      createdAt: "2024-03-22T17:00:00Z",
+      location: "Shibuya, Tokyo",
+      startTime: "14:00",
+      endTime: "15:00"
+    }
+  ])
+  media_insertMany(data: [
+    {
+      id: "950e8400-e29b-41d4-a716-446655440000",
+      activityId: "850e8400-e29b-41d4-a716-446655440000",
+      type: "image",
+      url: "https://example.com/eiffel.jpg",
+      createdAt: "2024-03-23T18:00:00Z",
+      caption: "Eiffel Tower photo"
+    },
+    {
+      id: "950e8400-e29b-41d4-a716-446655440001",
+      activityId: "850e8400-e29b-41d4-a716-446655440001",
+      type: "image",
+      url: "https://example.com/shibuya.jpg",
+      createdAt: "2024-03-24T19:00:00Z",
+      caption: "Shibuya Crossing photo"
+    }
+  ])
+}
