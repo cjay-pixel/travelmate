@@ -3,7 +3,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import Auth from './Auth';
 
-function Header({ user, onShowAuth }) {
+function Header({ user, onShowAuth, onNavigate }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
@@ -30,12 +30,24 @@ function Header({ user, onShowAuth }) {
     }
   };
 
+  const handleLogoClick = (e) => {
+    e.preventDefault();
+    if (onNavigate) {
+      onNavigate('home');
+    }
+  };
+
   return (
     <>
       <nav className="navbar navbar-expand-lg navbar-light bg-white border-bottom sticky-top shadow-sm">
         <div className="container-fluid px-3 px-lg-5 py-2">
           {/* Logo */}
-          <a className="navbar-brand d-flex align-items-center" href="#">
+          <a 
+            className="navbar-brand d-flex align-items-center" 
+            href="#" 
+            onClick={handleLogoClick}
+            style={{ cursor: 'pointer' }}
+          >
             <i className="bi bi-airplane-fill text-danger fs-3 me-2"></i>
             <span className="fw-bold fs-4">TravelMate</span>
           </a>
@@ -107,7 +119,7 @@ function Header({ user, onShowAuth }) {
                 onClick={closeAuthModal}
                 style={{ zIndex: 10 }}
               ></button>
-              <Auth />
+              <Auth onClose={closeAuthModal} />
             </div>
           </div>
         </div>

@@ -5,15 +5,15 @@ import FeaturesSection from '../components/FeaturesSection';
 import CTASection from '../components/CTASection';
 import Destinations from '../components/Destinations';
 
-function HomePage({ user }) {
+function HomePage({ user, onNavigate }) {
   return (
     <div className="homepage">
-      <Header user={user} />
+      <Header user={user} onNavigate={onNavigate} />
       
       <main>
         <HeroSection />
-        {user && <Destinations />}
-        <FeaturesSection />
+        {user && <Destinations user={user} />}
+        <FeaturesSection onNavigate={onNavigate} />
         <CTASection />
       </main>
     </div>

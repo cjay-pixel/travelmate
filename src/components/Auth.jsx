@@ -7,7 +7,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../../firebase';
 
-function Auth() {
+function Auth({ onClose }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -22,6 +22,7 @@ function Auth() {
         await signInWithEmailAndPassword(auth, email, password);
         alert('Logged in successfully!');
       }
+      if (onClose) onClose(); // Close modal after successful auth
     } catch (error) {
       alert(error.message);
     }
@@ -32,6 +33,7 @@ function Auth() {
     try {
       await signInWithPopup(auth, provider);
       alert('Signed in with Google successfully!');
+      if (onClose) onClose(); // Close modal after successful auth
     } catch (error) {
       alert(error.message);
     }
