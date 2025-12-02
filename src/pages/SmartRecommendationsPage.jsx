@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
+import Footer from '../components/Footer';
 
 function SmartRecommendationsPage({ user, onNavigate }) {
   const [step, setStep] = useState('preferences'); // 'preferences' or 'results'
@@ -246,6 +247,8 @@ function SmartRecommendationsPage({ user, onNavigate }) {
           </>
         )}
       </div>
+
+      <Footer />
     </div>
   );
 }

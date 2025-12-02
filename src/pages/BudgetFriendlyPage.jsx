@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
+import Footer from '../components/Footer';
 
 function BudgetFriendlyPage({ user, onNavigate }) {
   const [filters, setFilters] = useState({
@@ -375,6 +376,8 @@ function BudgetFriendlyPage({ user, onNavigate }) {
           </div>
         )}
       </div>
+
+      <Footer />
     </div>
   );
 }

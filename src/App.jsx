@@ -4,6 +4,7 @@ import { auth } from '../firebase';
 import HomePage from './pages/HomePage';
 import SmartRecommendationsPage from './pages/SmartRecommendationsPage';
 import BudgetFriendlyPage from './pages/BudgetFriendlyPage';
+import EasyPlanningPage from './pages/EasyPlanningPage';
 import './App.css';
 
 function App() {
@@ -27,6 +28,8 @@ function App() {
         return <SmartRecommendationsPage user={user} onNavigate={handleNavigate} />;
       case 'budget-friendly':
         return <BudgetFriendlyPage user={user} onNavigate={handleNavigate} />;
+      case 'easy-planning':
+        return <EasyPlanningPage user={user} onNavigate={handleNavigate} />;
       case 'home':
       default:
         return <HomePage user={user} onNavigate={handleNavigate} />;

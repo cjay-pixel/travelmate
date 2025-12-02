@@ -11,7 +11,7 @@ function FeaturesSection({ onNavigate }) {
     {
       icon: '✈️',
       title: 'Easy Planning',
-      description: 'Plan your entire trip with AI-powered itinerary generation',
+      description: 'Plan your entire trip with our comprehensive trip planner',
       page: 'easy-planning'
     },
     {

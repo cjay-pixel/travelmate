@@ -2,8 +2,7 @@ import React from 'react';
 import Header from '../components/Header';
 import HeroSection from '../components/HeroSection';
 import FeaturesSection from '../components/FeaturesSection';
-import CTASection from '../components/CTASection';
-import Destinations from '../components/Destinations';
+import Footer from '../components/Footer';
 
 function HomePage({ user, onNavigate }) {
   return (
@@ -12,10 +11,10 @@ function HomePage({ user, onNavigate }) {
       
       <main>
         <HeroSection />
-        {user && <Destinations user={user} />}
         <FeaturesSection onNavigate={onNavigate} />
-        <CTASection />
       </main>
+
+      <Footer />
     </div>
   );
 }
