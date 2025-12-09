@@ -1,26 +1,41 @@
 import React from 'react';
 
-function FeaturesSection({ onNavigate }) {
+function FeaturesSection({ onNavigate, user, onShowAuth }) {
   const features = [
     {
       icon: '🗺️',
       title: 'Smart Recommendations',
       description: 'Get personalized travel suggestions based on your preferences',
-      page: 'smart-recommendations'
+      page: 'smart-recommendations',
+      requiresAuth: true
     },
     {
       icon: '✈️',
       title: 'Easy Planning',
       description: 'Plan your entire trip with our comprehensive trip planner',
-      page: 'easy-planning'
+      page: 'easy-planning',
+      requiresAuth: true
     },
     {
       icon: '💰',
       title: 'Budget Friendly',
       description: 'Find the best deals and optimize your travel budget',
-      page: 'budget-friendly'
+      page: 'budget-friendly',
+      requiresAuth: true
     }
   ];
+
+  const handleFeatureClick = (feature) => {
+    if (feature.requiresAuth && !user) {
+      if (onShowAuth) {
+        onShowAuth();
+      }
+      return;
+    }
+    if (feature.page) {
+      onNavigate(feature.page);
+    }
+  };
 
   return (
     <section className="py-5 bg-light">
@@ -31,7 +46,7 @@ function FeaturesSection({ onNavigate }) {
               <div 
                 className="card h-100 border-0 shadow-sm text-center p-4 hover-card"
                 style={{ cursor: 'pointer' }}
-                onClick={() => feature.page && onNavigate(feature.page)}
+                onClick={() => handleFeatureClick(feature)}
               >
                 <div className="card-body">
                   <div className="mb-3" style={{ fontSize: '3rem' }}>{feature.icon}</div>
@@ -39,7 +54,16 @@ function FeaturesSection({ onNavigate }) {
                   <p className="card-text text-muted">{feature.description}</p>
                   {feature.page && (
                     <button className="btn btn-primary mt-2">
-                      Explore <i className="bi bi-arrow-right ms-2"></i>
+                      {feature.requiresAuth && !user ? (
+                        <>
+                          <i className="bi bi-lock me-2"></i>
+                          Login to Explore
+                        </>
+                      ) : (
+                        <>
+                          Explore <i className="bi bi-arrow-right ms-2"></i>
+                        </>
+                      )}
                     </button>
                   )}
                 </div>

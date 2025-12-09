@@ -242,13 +242,25 @@ function BudgetFriendlyPage({ user, onNavigate }) {
                   <i className="bi bi-calendar-check text-primary me-2"></i>
                   Start Date
                 </label>
-                <input 
-                  type="date"
-                  className="form-control form-control-lg"
-                  value={filters.startDate}
-                  onChange={(e) => setFilters({...filters, startDate: e.target.value})}
-                  min={new Date().toISOString().split('T')[0]}
-                />
+                <div className="input-group">
+                  <span 
+                    className="input-group-text bg-white"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => document.getElementById('startDate').showPicker()}
+                  >
+                    <i className="bi bi-calendar3"></i>
+                  </span>
+                  <input 
+                    id="startDate"
+                    type="date"
+                    className="form-control form-control-lg"
+                    value={filters.startDate}
+                    onChange={(e) => setFilters({...filters, startDate: e.target.value})}
+                    min={new Date().toISOString().split('T')[0]}
+                    required
+                    style={{ cursor: 'pointer' }}
+                  />
+                </div>
               </div>
 
               <div className="col-md-6">
@@ -256,13 +268,25 @@ function BudgetFriendlyPage({ user, onNavigate }) {
                   <i className="bi bi-calendar-check text-primary me-2"></i>
                   End Date
                 </label>
-                <input 
-                  type="date"
-                  className="form-control form-control-lg"
-                  value={filters.endDate}
-                  onChange={(e) => setFilters({...filters, endDate: e.target.value})}
-                  min={filters.startDate || new Date().toISOString().split('T')[0]}
-                />
+                <div className="input-group">
+                  <span 
+                    className="input-group-text bg-white"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => document.getElementById('endDate').showPicker()}
+                  >
+                    <i className="bi bi-calendar3"></i>
+                  </span>
+                  <input 
+                    id="endDate"
+                    type="date"
+                    className="form-control form-control-lg"
+                    value={filters.endDate}
+                    onChange={(e) => setFilters({...filters, endDate: e.target.value})}
+                    min={filters.startDate || new Date().toISOString().split('T')[0]}
+                    required
+                    style={{ cursor: 'pointer' }}
+                  />
+                </div>
               </div>
 
               {tripDays > 0 && (

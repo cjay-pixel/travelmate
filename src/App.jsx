@@ -5,11 +5,13 @@ import HomePage from './pages/HomePage';
 import SmartRecommendationsPage from './pages/SmartRecommendationsPage';
 import BudgetFriendlyPage from './pages/BudgetFriendlyPage';
 import EasyPlanningPage from './pages/EasyPlanningPage';
+import SearchResultsPage from './pages/SearchResultsPage';
 import './App.css';
 
 function App() {
   const [user, setUser] = useState(null);
   const [currentPage, setCurrentPage] = useState('home');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     onAuthStateChanged(auth, (currentUser) => {
@@ -17,8 +19,11 @@ function App() {
     });
   }, []);
 
-  const handleNavigate = (page) => {
+  const handleNavigate = (page, data) => {
     setCurrentPage(page);
+    if (page === 'search' && data) {
+      setSearchQuery(data);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -30,6 +35,8 @@ function App() {
         return <BudgetFriendlyPage user={user} onNavigate={handleNavigate} />;
       case 'easy-planning':
         return <EasyPlanningPage user={user} onNavigate={handleNavigate} />;
+      case 'search':
+        return <SearchResultsPage user={user} onNavigate={handleNavigate} searchQuery={searchQuery} />;
       case 'home':
       default:
         return <HomePage user={user} onNavigate={handleNavigate} />;
