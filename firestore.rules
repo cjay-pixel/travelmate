@@ -36,6 +36,12 @@ service cloud.firestore {
                                (request.auth.uid == userId || isSuperAdmin());
     }
     
+    // Destinations collection - admins can manage, users can read
+    match /destinations/{destinationId} {
+      allow read: if true; // Public read access
+      allow create, update, delete: if request.auth != null; // Authenticated admins can write
+    }
+    
     // Default deny all other collections
     match /{document=**} {
       allow read, write: if false;

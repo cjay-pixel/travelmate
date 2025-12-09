@@ -4,6 +4,7 @@ import { getAnalytics } from "firebase/analytics";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
+import { getStorage } from "firebase/storage";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -30,6 +31,9 @@ export const functions = getFunctions(app);
 setPersistence(auth, browserLocalPersistence).catch((error) => {
   console.error('Error setting auth persistence:', error);
 });
+
+// Initialize Firebase Storage
+export const storage = getStorage(app);
 
 // Secondary app for creating admin users without affecting current session
 const secondaryApp = initializeApp(firebaseConfig, 'Secondary');
