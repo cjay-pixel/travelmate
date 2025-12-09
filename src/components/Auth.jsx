@@ -5,21 +5,43 @@ import {
   signInWithPopup,
   GoogleAuthProvider 
 } from 'firebase/auth';
-import { auth } from '../../firebase';
+import { auth, db } from '../../firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 function Auth({ onClose }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+
+  const createUserDocument = async (user) => {
+    try {
+      // Store regular users in 'users' collection
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
+        displayName: user.displayName || null,
+        createdAt: serverTimestamp(),
+        photoURL: user.photoURL || null,
+        uid: user.uid
+      });
+    } catch (error) {
+      console.error('Error creating user document:', error);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await createUserDocument(userCredential.user);
+        // Mark this session as user
+        sessionStorage.setItem('sessionType', 'user');
         alert('Account created successfully!');
       } else {
         await signInWithEmailAndPassword(auth, email, password);
+        // Mark this session as user
+        sessionStorage.setItem('sessionType', 'user');
         alert('Logged in successfully!');
       }
       if (onClose) onClose(); // Close modal after successful auth
@@ -31,7 +53,13 @@ function Auth({ onClose }) {
   const handleGoogleSignIn = async () => {
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      // Check if this is a new user and create document
+      if (result.user.metadata.creationTime === result.user.metadata.lastSignInTime) {
+        await createUserDocument(result.user);
+      }
+      // Mark this session as user
+      sessionStorage.setItem('sessionType', 'user');
       alert('Signed in with Google successfully!');
       if (onClose) onClose(); // Close modal after successful auth
     } catch (error) {
@@ -79,14 +107,24 @@ function Auth({ onClose }) {
               />
             </div>
             <div className="mb-4">
-              <input 
-                type="password" 
-                className="form-control form-control-lg" 
-                placeholder="Password" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                required 
-              />
+              <div className="position-relative">
+                <input 
+                  type={showPassword ? "text" : "password"}
+                  className="form-control form-control-lg pe-5" 
+                  placeholder="Password" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  required 
+                />
+                <button
+                  type="button"
+                  className="btn btn-link position-absolute end-0 top-50 translate-middle-y text-muted"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ textDecoration: 'none', zIndex: 10 }}
+                >
+                  <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
+                </button>
+              </div>
             </div>
             <button type="submit" className="btn btn-danger w-100 py-3 fw-bold" style={{ background: 'linear-gradient(to right, #FF385C, #E31C5F)', border: 'none' }}>
               {isSignUp ? 'Sign up' : 'Log in'}
