@@ -42,6 +42,12 @@ service cloud.firestore {
       allow create, update, delete: if request.auth != null; // Authenticated admins can write
     }
     
+    // Preferences collection - admins can manage, users can read
+    match /preferences/{preferenceId} {
+      allow read: if true; // Public read access for user-facing preference display
+      allow create, update, delete: if request.auth != null; // Authenticated admins can write
+    }
+    
     // Default deny all other collections
     match /{document=**} {
       allow read, write: if false;

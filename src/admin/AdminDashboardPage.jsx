@@ -6,6 +6,7 @@ import ManageAdmins from './ManageAdmins';
 import Dashboard from './components/Dashboard';
 import Users from './components/Users';
 import Destinations from './components/Destinations';
+import Preferences from './components/Preferences';
 import Messages from './components/Messages';
 import Analytics from './components/Analytics';
 
@@ -220,6 +221,21 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
             </button>
 
             <button
+              onClick={() => onNavigate('admin-dashboard', 'preferences')}
+              className={`nav-link text-start rounded-3 d-flex align-items-center px-3 py-2 border-0 ${
+                activeSection === 'preferences' ? 'active' : ''
+              }`}
+              style={{
+                backgroundColor: activeSection === 'preferences' ? '#FF385C15' : 'transparent',
+                color: activeSection === 'preferences' ? '#FF385C' : '#717171',
+                fontWeight: activeSection === 'preferences' ? '600' : 'normal'
+              }}
+            >
+              <i className="bi bi-grid-3x3-gap-fill me-3" style={{ fontSize: '1.1rem' }}></i>
+              Preferences
+            </button>
+
+            <button
               onClick={() => onNavigate('admin-dashboard', 'messages')}
               className={`nav-link text-start rounded-3 d-flex align-items-center px-3 py-2 border-0 ${
                 activeSection === 'messages' ? 'active' : ''
@@ -232,7 +248,7 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
             >
               <i className="bi bi-chat-dots me-3" style={{ fontSize: '1.1rem' }}></i>
               Messages
-              <span className="badge rounded-pill ms-auto" style={{ backgroundColor: '#FF385C', color: 'white' }}>3</span>
+              {/* <span className="badge rounded-pill ms-auto" style={{ backgroundColor: '#FF385C', color: 'white' }}>3</span> */}
             </button>
 
             <button
@@ -331,6 +347,7 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
           {activeSection === 'dashboard' && <Dashboard stats={stats} />}
           {activeSection === 'users' && <Users />}
           {activeSection === 'destinations' && <Destinations />}
+          {activeSection === 'preferences' && <Preferences />}
           {activeSection === 'messages' && <Messages />}
           {activeSection === 'analytics' && <Analytics />}
           {activeSection === 'admins' && <ManageAdmins />}

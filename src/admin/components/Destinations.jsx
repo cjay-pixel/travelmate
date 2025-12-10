@@ -5,8 +5,10 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 function Destinations() {
   const [destinations, setDestinations] = useState([]);
+  const [preferences, setPreferences] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
   
   // Form states
@@ -23,27 +25,31 @@ function Destinations() {
   const [imageFile, setImageFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
-  const categoryOptions = [
-    'Beach Paradise',
-    'Mountain Adventures',
-    'City Exploration',
-    'Historical Sites',
-    'Island Hopping',
-    'Food & Cuisine',
-    'Nature & Wildlife',
-    'Water Activities',
-    'Rice Terraces',
-    'Night Life',
-    'Waterfalls',
-    'Temples & Churches',
-    'Shopping Districts',
-    'Festivals & Events',
-    'Sunset Views'
-  ];
-
   useEffect(() => {
     loadDestinations();
+    loadPreferences();
   }, []);
+
+  const loadPreferences = async () => {
+    try {
+      const preferencesRef = collection(db, 'preferences');
+      const snapshot = await getDocs(preferencesRef);
+      
+      const preferencesList = [];
+      snapshot.forEach((doc) => {
+        preferencesList.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      // Sort by order and extract titles for category options
+      preferencesList.sort((a, b) => (a.order || 0) - (b.order || 0));
+      setPreferences(preferencesList);
+    } catch (error) {
+      console.error('Error loading preferences:', error);
+    }
+  };
 
   const loadDestinations = async () => {
     try {
@@ -82,21 +88,38 @@ function Destinations() {
     setMessage({ type: '', text: '' });
 
     try {
-      // Add destination to Firestore
-      await addDoc(collection(db, 'destinations'), {
-        destinationName: formData.destinationName,
-        cityName: formData.cityName,
-        regionName: formData.regionName,
-        description: formData.description,
-        category: formData.category,
-        budget: formData.budget,
-        rating: parseFloat(formData.rating),
-        imageUrl: formData.imageUrl,
-        createdAt: serverTimestamp(),
-        status: 'active'
-      });
+      if (editingId) {
+        // Update existing destination
+        await updateDoc(doc(db, 'destinations', editingId), {
+          destinationName: formData.destinationName,
+          cityName: formData.cityName,
+          regionName: formData.regionName,
+          description: formData.description,
+          category: formData.category,
+          budget: formData.budget,
+          rating: parseFloat(formData.rating),
+          imageUrl: formData.imageUrl,
+          updatedAt: serverTimestamp()
+        });
 
-      setMessage({ type: 'success', text: 'Destination added successfully!' });
+        setMessage({ type: 'success', text: 'Destination updated successfully!' });
+      } else {
+        // Add new destination
+        await addDoc(collection(db, 'destinations'), {
+          destinationName: formData.destinationName,
+          cityName: formData.cityName,
+          regionName: formData.regionName,
+          description: formData.description,
+          category: formData.category,
+          budget: formData.budget,
+          rating: parseFloat(formData.rating),
+          imageUrl: formData.imageUrl,
+          createdAt: serverTimestamp(),
+          status: 'active'
+        });
+
+        setMessage({ type: 'success', text: 'Destination added successfully!' });
+      }
       
       // Reset form
       setFormData({
@@ -111,12 +134,13 @@ function Destinations() {
       });
       setImageFile(null);
       setShowAddForm(false);
+      setEditingId(null);
       
       // Reload destinations
       loadDestinations();
     } catch (error) {
-      console.error('Error adding destination:', error);
-      setMessage({ type: 'danger', text: `Failed to add destination: ${error.message}` });
+      console.error('Error saving destination:', error);
+      setMessage({ type: 'danger', text: `Failed to save destination: ${error.message}` });
     } finally {
       setUploading(false);
     }
@@ -135,6 +159,37 @@ function Destinations() {
       console.error('Error deleting destination:', error);
       setMessage({ type: 'danger', text: 'Failed to delete destination' });
     }
+  };
+
+  const handleEdit = (destination) => {
+    setFormData({
+      destinationName: destination.destinationName,
+      cityName: destination.cityName,
+      regionName: destination.regionName,
+      description: destination.description,
+      category: destination.category || [],
+      budget: destination.budget,
+      rating: destination.rating,
+      imageUrl: destination.imageUrl
+    });
+    setEditingId(destination.id);
+    setShowAddForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setFormData({
+      destinationName: '',
+      cityName: '',
+      regionName: '',
+      description: '',
+      category: [],
+      budget: '',
+      rating: 5,
+      imageUrl: ''
+    });
+    setEditingId(null);
+    setShowAddForm(false);
   };
 
   const handleCategoryToggle = (category) => {
@@ -168,7 +223,13 @@ function Destinations() {
           </h5>
           <button 
             className="btn btn-danger"
-            onClick={() => setShowAddForm(!showAddForm)}
+            onClick={() => {
+              if (showAddForm && editingId) {
+                handleCancelEdit();
+              } else {
+                setShowAddForm(!showAddForm);
+              }
+            }}
             style={{ background: 'linear-gradient(to right, #FF385C, #E31C5F)', border: 'none' }}
           >
             <i className={`bi ${showAddForm ? 'bi-x-lg' : 'bi-plus-lg'} me-2`}></i>
@@ -185,11 +246,13 @@ function Destinations() {
           </div>
         )}
 
-        {/* Add Destination Form */}
+        {/* Add/Edit Destination Form */}
         {showAddForm && (
           <div className="card mb-4" style={{ backgroundColor: '#f8f9fa' }}>
             <div className="card-body p-4">
-              <h6 className="fw-bold mb-3">Add New Destination</h6>
+              <h6 className="fw-bold mb-3">
+                {editingId ? 'Edit Destination' : 'Add New Destination'}
+              </h6>
               <form onSubmit={handleSubmit}>
                 <div className="row">
                   <div className="col-md-4 mb-3">
@@ -289,21 +352,30 @@ function Destinations() {
                   <div className="col-12 mb-3">
                     <label className="form-label fw-semibold">Categories *</label>
                     <div className="row g-2">
-                      {categoryOptions.map((category) => (
-                        <div key={category} className="col-md-4 col-lg-3">
-                          <div
-                            className={`p-2 rounded text-center cursor-pointer ${
-                              formData.category.includes(category)
-                                ? 'bg-danger text-white'
-                                : 'bg-light'
-                            }`}
-                            onClick={() => handleCategoryToggle(category)}
-                            style={{ cursor: 'pointer', fontSize: '0.875rem' }}
-                          >
-                            {category}
+                      {preferences.length > 0 ? (
+                        preferences.map((preference) => (
+                          <div key={preference.id} className="col-md-4 col-lg-3">
+                            <div
+                              className={`p-2 rounded text-center cursor-pointer ${
+                                formData.category.includes(preference.title)
+                                  ? 'bg-danger text-white'
+                                  : 'bg-light'
+                              }`}
+                              onClick={() => handleCategoryToggle(preference.title)}
+                              style={{ cursor: 'pointer', fontSize: '0.875rem' }}
+                            >
+                              {preference.title}
+                            </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="col-12">
+                          <p className="text-muted mb-0">
+                            <i className="bi bi-info-circle me-2"></i>
+                            No preferences available. Please add preferences first in the Preferences section.
+                          </p>
                         </div>
-                      ))}
+                      )}
                     </div>
                     <small className="text-muted">Click to select/deselect categories</small>
                   </div>
@@ -323,15 +395,15 @@ function Destinations() {
                       </>
                     ) : (
                       <>
-                        <i className="bi bi-plus-circle me-2"></i>
-                        Add Destination
+                        <i className={`bi ${editingId ? 'bi-check-circle' : 'bi-plus-circle'} me-2`}></i>
+                        {editingId ? 'Update Destination' : 'Add Destination'}
                       </>
                     )}
                   </button>
                   <button
                     type="button"
                     className="btn btn-outline-secondary"
-                    onClick={() => setShowAddForm(false)}
+                    onClick={handleCancelEdit}
                   >
                     Cancel
                   </button>
@@ -429,12 +501,22 @@ function Destinations() {
                         <small className="text-muted">{destination.budget}</small>
                       </td>
                       <td>
-                        <button
-                          className="btn btn-sm btn-outline-danger"
-                          onClick={() => handleDelete(destination.id, destination.destinationName)}
-                        >
-                          <i className="bi bi-trash"></i>
-                        </button>
+                        <div className="d-flex gap-1">
+                          <button
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => handleEdit(destination)}
+                            title="Edit"
+                          >
+                            <i className="bi bi-pencil"></i>
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => handleDelete(destination.id, destination.destinationName)}
+                            title="Delete"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
