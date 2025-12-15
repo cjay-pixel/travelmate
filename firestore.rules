@@ -48,6 +48,14 @@ service cloud.firestore {
       allow create, update, delete: if request.auth != null; // Authenticated admins can write
     }
     
+    // Trip Plans collection - users can manage their own, admins can read all
+    match /tripPlans/{planId} {
+      allow read: if request.auth != null; // Authenticated users and admins can read
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && 
+                               (request.auth.uid == resource.data.userId || isSuperAdmin());
+    }
+    
     // Default deny all other collections
     match /{document=**} {
       allow read, write: if false;

@@ -1,12 +1,25 @@
 import React from 'react';
 
-function Dashboard({ stats }) {
+function Dashboard({ stats, onRefresh }) {
+  console.log('Dashboard received stats:', stats);
+  
   return (
     <>
       <div className="row mb-4">
         <div className="col-12">
-          <h2 className="fw-bold mb-2" style={{ color: '#222' }}>Welcome back!</h2>
-          <p className="text-muted mb-0">Here's what's happening with TravelMate AI today.</p>
+          <div className="d-flex justify-content-between align-items-center">
+            <div>
+              <h2 className="fw-bold mb-2" style={{ color: '#222' }}>Welcome back!</h2>
+              <p className="text-muted mb-0">Here's what's happening with TravelMate AI today.</p>
+            </div>
+            <button 
+              className="btn btn-outline-primary btn-sm"
+              onClick={onRefresh}
+            >
+              <i className="bi bi-arrow-clockwise me-2"></i>
+              Refresh
+            </button>
+          </div>
         </div>
       </div>
 

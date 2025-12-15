@@ -5,6 +5,9 @@ import { db } from '../../firebase';
 function Destinations({ user }) {
   const [tripPlans, setTripPlans] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [showRecommendations, setShowRecommendations] = useState(false);
+  const [recommendedPlaces, setRecommendedPlaces] = useState([]);
+  const [selectedPlaces, setSelectedPlaces] = useState([]);
   const [formData, setFormData] = useState({
     destination: '',
     budget: 5000,
@@ -26,6 +29,35 @@ function Destinations({ user }) {
     'Siargao', 'Baguio', 'Vigan', 'Davao', 'El Nido',
     'Coron', 'Batanes', 'Sagada', 'Ilocos Norte', 'Camiguin'
   ];
+
+  // Temporary database of places for demonstration
+  const tempPlacesDatabase = {
+    'Palawan': [
+      { name: 'El Nido Beach Resort', type: 'Beach', budget: 8000, rating: 4.8, image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400' },
+      { name: 'Puerto Princesa Underground River', type: 'Nature', budget: 3000, rating: 4.7, image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400' },
+      { name: 'Coron Island Hopping', type: 'Adventure', budget: 5000, rating: 4.9, image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400' }
+    ],
+    'Boracay': [
+      { name: 'White Beach', type: 'Beach', budget: 10000, rating: 4.9, image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400' },
+      { name: 'Puka Shell Beach', type: 'Beach', budget: 2000, rating: 4.6, image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400' },
+      { name: 'Water Sports Activities', type: 'Adventure', budget: 4000, rating: 4.7, image: 'https://images.unsplash.com/photo-1537519646099-335112b00ff2?w=400' }
+    ],
+    'Cebu': [
+      { name: 'Kawasan Falls', type: 'Nature', budget: 3500, rating: 4.8, image: 'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?w=400' },
+      { name: 'Oslob Whale Shark Watching', type: 'Adventure', budget: 6000, rating: 4.9, image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400' },
+      { name: 'Magellan\'s Cross', type: 'Cultural', budget: 500, rating: 4.5, image: 'https://images.unsplash.com/photo-1533929736458-ca588d08c8be?w=400' }
+    ],
+    'Baguio': [
+      { name: 'Burnham Park', type: 'Nature', budget: 1000, rating: 4.4, image: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400' },
+      { name: 'Mines View Park', type: 'Nature', budget: 500, rating: 4.5, image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400' },
+      { name: 'Strawberry Farm', type: 'Activity', budget: 2000, rating: 4.6, image: 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=400' }
+    ],
+    'Manila': [
+      { name: 'Intramuros Walking Tour', type: 'Cultural', budget: 2000, rating: 4.6, image: 'https://images.unsplash.com/photo-1555993539-1732b0258235?w=400' },
+      { name: 'Rizal Park', type: 'Park', budget: 500, rating: 4.4, image: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400' },
+      { name: 'Mall of Asia', type: 'Shopping', budget: 5000, rating: 4.7, image: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400' }
+    ]
+  };
 
   useEffect(() => {
     const fetchTripPlans = async () => {
@@ -70,11 +102,54 @@ function Destinations({ user }) {
         transportation: (formData.budget * formData.budgetAllocation.transportation) / 100
       };
 
+      // Get recommended places based on destination and budget
+      const places = tempPlacesDatabase[formData.destination] || [];
+      const filteredPlaces = places.filter(place => place.budget <= formData.budget);
+      
+      // Show recommendations without saving yet
+      setRecommendedPlaces(filteredPlaces);
+      setSelectedPlaces([]);
+      setShowRecommendations(true);
+      setLoading(false);
+    } catch (error) {
+      alert('Error generating recommendations: ' + error.message);
+      setLoading(false);
+    }
+  };
+
+  const togglePlaceSelection = (place) => {
+    setSelectedPlaces(prev => {
+      const isSelected = prev.some(p => p.name === place.name);
+      if (isSelected) {
+        return prev.filter(p => p.name !== place.name);
+      } else {
+        return [...prev, place];
+      }
+    });
+  };
+
+  const handleSaveTrip = async () => {
+    if (selectedPlaces.length === 0) {
+      alert('Please select at least one place to save your trip!');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const budgetBreakdown = {
+        accommodation: (formData.budget * formData.budgetAllocation.accommodation) / 100,
+        activities: (formData.budget * formData.budgetAllocation.activities) / 100,
+        food: (formData.budget * formData.budgetAllocation.food) / 100,
+        transportation: (formData.budget * formData.budgetAllocation.transportation) / 100
+      };
+
       if (editingId) {
         // Update existing trip plan
         await updateDoc(doc(db, 'tripPlans', editingId), {
           ...formData,
           budgetBreakdown,
+          selectedPlaces: selectedPlaces,
+          recommendedPlaces: recommendedPlaces,
           updatedAt: new Date().toISOString()
         });
         alert('Trip plan updated successfully!');
@@ -84,6 +159,8 @@ function Destinations({ user }) {
         await addDoc(collection(db, 'tripPlans'), {
           ...formData,
           budgetBreakdown,
+          selectedPlaces: selectedPlaces,
+          recommendedPlaces: recommendedPlaces,
           userId: user.uid,
           userEmail: user.email,
           createdAt: new Date().toISOString()
@@ -91,7 +168,7 @@ function Destinations({ user }) {
         alert('Trip plan saved successfully!');
       }
       
-      // Reset form
+      // Reset form and recommendations
       setFormData({
         destination: '',
         budget: 5000,
@@ -105,6 +182,9 @@ function Destinations({ user }) {
         endDate: '',
         preferredTime: 'morning'
       });
+      setShowRecommendations(false);
+      setRecommendedPlaces([]);
+      setSelectedPlaces([]);
 
       // Refresh list
       const q = query(
@@ -173,7 +253,19 @@ function Destinations({ user }) {
   };
 
   return (
-    <div className="container py-5">
+    <>
+      <style>
+        {`
+          .hover-lift {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+          }
+          .hover-lift:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15) !important;
+          }
+        `}
+      </style>
+      <div className="container py-5">
       <div className="row justify-content-center">
         <div className="col-lg-8">
           {/* Main Form Card */}
@@ -395,13 +487,127 @@ function Destinations({ user }) {
                   ) : (
                     <>
                       <i className="bi bi-stars me-2"></i>
-                      {editingId ? 'Update Trip Plan' : 'Get AI Recommendations'}
+                      {editingId ? 'Update Trip Plan' : 'Get Recommendations'}
                     </>
                   )}
                 </button>
               </form>
             </div>
           </div>
+
+          {/* Recommended Places Section */}
+          {showRecommendations && (
+            <div className="card shadow-lg border-0 rounded-4 mb-5">
+              <div className="card-body p-4 p-md-5">
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                  <h3 className="fw-bold mb-0">
+                    <i className="bi bi-stars text-warning me-2"></i>
+                    Recommended Places for {formData.destination}
+                  </h3>
+                  <button 
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => setShowRecommendations(false)}
+                  >
+                    <i className="bi bi-x-lg"></i> Hide
+                  </button>
+                </div>
+
+                {recommendedPlaces.length > 0 ? (
+                  <>
+                    <div className="alert alert-info mb-4">
+                      <i className="bi bi-info-circle me-2"></i>
+                      Select the places you want to visit, then click "Save Trip" below.
+                      {selectedPlaces.length > 0 && (
+                        <strong className="ms-2">({selectedPlaces.length} selected)</strong>
+                      )}
+                    </div>
+                    
+                    <div className="row g-4 mb-4">
+                      {recommendedPlaces.map((place, index) => {
+                        const isSelected = selectedPlaces.some(p => p.name === place.name);
+                        return (
+                          <div key={index} className="col-md-6">
+                            <div 
+                              className={`card h-100 border-0 shadow-sm hover-lift ${isSelected ? 'border-success' : ''}`}
+                              style={{ 
+                                border: isSelected ? '3px solid #28a745' : 'none',
+                                cursor: 'pointer',
+                                position: 'relative'
+                              }}
+                              onClick={() => togglePlaceSelection(place)}
+                            >
+                              {isSelected && (
+                                <div 
+                                  className="position-absolute top-0 end-0 m-3"
+                                  style={{ zIndex: 10 }}
+                                >
+                                  <div className="badge bg-success rounded-circle" style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <i className="bi bi-check-lg" style={{ fontSize: '1.5rem' }}></i>
+                                  </div>
+                                </div>
+                              )}
+                              <img 
+                                src={place.image} 
+                                alt={place.name}
+                                className="card-img-top"
+                                style={{ height: '200px', objectFit: 'cover', opacity: isSelected ? 0.9 : 1 }}
+                              />
+                              <div className="card-body">
+                                <h5 className="card-title fw-bold">{place.name}</h5>
+                                <div className="d-flex gap-2 mb-3">
+                                  <span className="badge bg-primary">{place.type}</span>
+                                  <span className="badge bg-success">₱{place.budget.toLocaleString()}</span>
+                                  <span className="badge bg-warning text-dark">
+                                    <i className="bi bi-star-fill"></i> {place.rating}
+                                  </span>
+                                </div>
+                                <p className="text-muted small mb-0">
+                                  {isSelected ? (
+                                    <strong className="text-success">
+                                      <i className="bi bi-check-circle-fill me-1"></i>
+                                      Added to your trip
+                                    </strong>
+                                  ) : (
+                                    <>Click to add to your trip</>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="text-center">
+                      <button 
+                        className="btn btn-danger btn-lg px-5 py-3"
+                        style={{ background: 'linear-gradient(to right, #FF385C, #E31C5F)', border: 'none' }}
+                        onClick={handleSaveTrip}
+                        disabled={selectedPlaces.length === 0 || loading}
+                      >
+                        {loading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2"></span>
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <i className="bi bi-save me-2"></i>
+                            Save Trip ({selectedPlaces.length} {selectedPlaces.length === 1 ? 'place' : 'places'})
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="alert alert-info mb-0">
+                    <i className="bi bi-info-circle me-2"></i>
+                    No places found matching your budget of ₱{formData.budget.toLocaleString()}. Try increasing your budget!
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Saved Trip Plans */}
           {tripPlans.length > 0 && (
@@ -439,10 +645,48 @@ function Destinations({ user }) {
                           <i className="bi bi-wallet2 me-1"></i>
                           Budget: ₱{plan.budget?.toLocaleString()}
                         </p>
-                        <p className="card-text small mb-0">
+                        <p className="card-text small mb-3">
                           <i className="bi bi-brightness-high me-1"></i>
                           {plan.preferredTime}
                         </p>
+                        
+                        {/* Selected Places */}
+                        {plan.selectedPlaces && plan.selectedPlaces.length > 0 && (
+                          <div className="mt-3 pt-3 border-top">
+                            <h6 className="fw-bold mb-3">
+                              <i className="bi bi-geo-alt-fill text-danger me-2"></i>
+                              Selected Places ({plan.selectedPlaces.length})
+                            </h6>
+                            <div className="row g-2">
+                              {plan.selectedPlaces.map((place, idx) => (
+                                <div key={idx} className="col-12">
+                                  <div className="card border-0" style={{ backgroundColor: '#f8f9fa' }}>
+                                    <div className="card-body p-2">
+                                      <div className="d-flex align-items-center">
+                                        <img 
+                                          src={place.image} 
+                                          alt={place.name}
+                                          className="rounded"
+                                          style={{ width: '60px', height: '60px', objectFit: 'cover' }}
+                                        />
+                                        <div className="ms-3 flex-grow-1">
+                                          <h6 className="mb-1 small fw-bold">{place.name}</h6>
+                                          <div className="d-flex gap-1">
+                                            <span className="badge bg-primary" style={{ fontSize: '0.7rem' }}>{place.type}</span>
+                                            <span className="badge bg-success" style={{ fontSize: '0.7rem' }}>₱{place.budget.toLocaleString()}</span>
+                                            <span className="badge bg-warning text-dark" style={{ fontSize: '0.7rem' }}>
+                                              <i className="bi bi-star-fill"></i> {place.rating}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -452,7 +696,8 @@ function Destinations({ user }) {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

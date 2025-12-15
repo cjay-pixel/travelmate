@@ -105,16 +105,30 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
   useEffect(() => {
     // Update active section when prop changes
     setActiveSection(section);
-  }, [section]);
+    
+    // Reload dashboard data when returning to dashboard
+    if (section === 'dashboard' && !loading && user) {
+      console.log('Section changed to dashboard, reloading data...');
+      loadDashboardData();
+    }
+  }, [section, loading, user]);
 
   const loadDashboardData = async () => {
     try {
-      // You can add real Firestore queries here
-      // For now, using placeholder data
+      console.log('Loading dashboard data...');
+      // Fetch real counts from Firestore
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const tripPlansSnapshot = await getDocs(collection(db, 'tripPlans'));
+      const destinationsSnapshot = await getDocs(collection(db, 'destinations'));
+      
+      console.log('Users count:', usersSnapshot.size);
+      console.log('Trip Plans count:', tripPlansSnapshot.size);
+      console.log('Destinations count:', destinationsSnapshot.size);
+      
       setStats({
-        totalUsers: 0,
-        totalBookings: 0,
-        totalDestinations: 0,
+        totalUsers: usersSnapshot.size,
+        totalBookings: tripPlansSnapshot.size,
+        totalDestinations: destinationsSnapshot.size,
         recentActivity: []
       });
     } catch (error) {
@@ -167,7 +181,7 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
           {/* Logo/Brand */}
           <div className="mb-4">
             <h4 className="fw-bold mb-0" style={{ color: '#FF385C' }}>
-              <i className="bi bi-speedometer2 me-2"></i>
+              {/* <i className="bi bi-speedometer2 me-2"></i> */}
               TravelMate
             </h4>
             <small className="text-muted">Admin Panel</small>
@@ -344,7 +358,7 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
         {/* Content */}
         <div className="p-3 p-md-4">
           {/* Render component based on active section */}
-          {activeSection === 'dashboard' && <Dashboard stats={stats} />}
+          {activeSection === 'dashboard' && <Dashboard stats={stats} onRefresh={loadDashboardData} />}
           {activeSection === 'users' && <Users />}
           {activeSection === 'destinations' && <Destinations />}
           {activeSection === 'preferences' && <Preferences />}
