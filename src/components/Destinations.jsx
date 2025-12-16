@@ -1,13 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { collection, getDocs, addDoc, query, where, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
-function Destinations({ user }) {
+function Destinations({ user, initialPlan }) {
   const [tripPlans, setTripPlans] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [recommendedPlaces, setRecommendedPlaces] = useState([]);
   const [selectedPlaces, setSelectedPlaces] = useState([]);
+  const [availableCities, setAvailableCities] = useState([]);
+  const [allAdminPlaces, setAllAdminPlaces] = useState([]);
+  const [selectedPlaceDetails, setSelectedPlaceDetails] = useState(null);
   const [formData, setFormData] = useState({
     destination: '',
     budget: 5000,
@@ -22,8 +25,9 @@ function Destinations({ user }) {
     preferredTime: 'morning'
   });
   const [loading, setLoading] = useState(false);
+  const formRef = useRef(null);
 
-  // Popular Philippine destinations
+  // Popular Philippine destinations (fallback)
   const popularDestinations = [
     'Manila', 'Boracay', 'Palawan', 'Cebu', 'Bohol', 
     'Siargao', 'Baguio', 'Vigan', 'Davao', 'El Nido',
@@ -73,6 +77,20 @@ function Destinations({ user }) {
       setTripPlans(plans);
     };
     fetchTripPlans();
+    // Load admin-managed destinations used for dropdown / recommendations
+    const loadAdminPlaces = async () => {
+      try {
+        const q = query(collection(db, 'destinations'));
+        const snap = await getDocs(q);
+        const places = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAllAdminPlaces(places);
+        const cities = Array.from(new Set(places.map(p => p.cityName || p.regionName || p.destinationName))).filter(Boolean).sort();
+        setAvailableCities(cities);
+      } catch (err) {
+        console.error('Failed to load admin destinations', err);
+      }
+    };
+    loadAdminPlaces();
   }, [user]);
 
   const handleInputChange = (field, value) => {
@@ -102,12 +120,40 @@ function Destinations({ user }) {
         transportation: (formData.budget * formData.budgetAllocation.transportation) / 100
       };
 
-      // Get recommended places based on destination and budget
-      const places = tempPlacesDatabase[formData.destination] || [];
-      const filteredPlaces = places.filter(place => place.budget <= formData.budget);
-      
-      // Show recommendations without saving yet
-      setRecommendedPlaces(filteredPlaces);
+      // Get recommended places from Firestore 'destinations'
+      const sel = (formData.destination || '').toString().toLowerCase();
+      let matches = allAdminPlaces.filter(p => {
+        const city = (p.cityName || '').toString().toLowerCase();
+        const name = (p.destinationName || '').toString().toLowerCase();
+        const region = (p.regionName || '').toString().toLowerCase();
+        return sel && (city === sel || name === sel || region === sel);
+      });
+
+      if (matches.length === 0) {
+        // fallback to include contains
+        matches = allAdminPlaces.filter(p => {
+          const city = (p.cityName || '').toString().toLowerCase();
+          const name = (p.destinationName || '').toString().toLowerCase();
+          const region = (p.regionName || '').toString().toLowerCase();
+          return city.includes(sel) || name.includes(sel) || region.includes(sel);
+        });
+      }
+
+      // filter by numeric budget when provided by admin doc
+      const filteredPlaces = matches.filter(place => {
+        const b = Number(place.budget);
+        if (!isNaN(b) && b > 0) return b <= formData.budget;
+        return true;
+      });
+
+      setRecommendedPlaces(filteredPlaces.map(p => ({
+        name: p.destinationName || p.cityName || 'Unknown',
+        type: (p.category && p.category[0]) || 'General',
+        budget: Number(p.budget) || 0,
+        rating: Number(p.rating) || 0,
+        image: (p.images && p.images[0]) || p.imageUrl || '',
+        raw: p
+      })));
       setSelectedPlaces([]);
       setShowRecommendations(true);
       setLoading(false);
@@ -210,9 +256,17 @@ function Destinations({ user }) {
       endDate: plan.endDate,
       preferredTime: plan.preferredTime
     });
+    // restore selected places/recommendations so user can continue editing
+    setSelectedPlaces(plan.selectedPlaces || []);
+    setRecommendedPlaces(plan.recommendedPlaces || []);
     setEditingId(plan.id);
-    // Scroll to form
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll to form smoothly
+    try {
+      if (formRef && formRef.current) formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      else window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleDelete = async (planId) => {
@@ -252,6 +306,18 @@ function Destinations({ user }) {
     });
   };
 
+  // If the page was opened with an initial plan (via navigation state), start editing it
+  useEffect(() => {
+    if (initialPlan && typeof initialPlan === 'object') {
+      try {
+        handleEdit(initialPlan);
+      } catch (err) {
+        console.warn('Failed to apply initial plan to edit:', err);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPlan]);
+
   return (
     <>
       <style>
@@ -269,7 +335,7 @@ function Destinations({ user }) {
       <div className="row justify-content-center">
         <div className="col-lg-8">
           {/* Main Form Card */}
-          <div className="card shadow-lg border-0 rounded-4 mb-5">
+          <div ref={formRef} className="card shadow-lg border-0 rounded-4 mb-5">
             <div className="card-body p-4 p-md-5">
               {editingId && (
                 <div className="alert alert-info d-flex justify-content-between align-items-center mb-4">
@@ -289,27 +355,32 @@ function Destinations({ user }) {
                 {editingId ? 'Edit Your Trip' : 'Plan Your Perfect Trip'}
               </h2>
               <p className="text-center text-muted mb-4">
-                Let AI help you create the perfect itinerary
+                Let Travelmate help you create the perfect itinerary
               </p>
 
               <form onSubmit={handleSubmit}>
-                {/* Destination */}
+                {/* Destination selector (populated from admin destinations) */}
                 <div className="mb-4">
                   <label className="form-label fw-bold">
                     <i className="bi bi-geo-alt-fill text-danger me-2"></i>
                     Destination
                   </label>
-                  <select 
-                    className="form-select form-select-lg"
-                    value={formData.destination}
-                    onChange={(e) => handleInputChange('destination', e.target.value)}
-                    required
-                  >
-                    <option value="">Select a destination</option>
-                    {popularDestinations.map((dest, index) => (
-                      <option key={index} value={dest}>{dest}</option>
-                    ))}
-                  </select>
+                  <div className="d-flex">
+                    <select
+                      className="form-select form-select-lg"
+                      value={formData.destination}
+                      onChange={(e) => handleInputChange('destination', e.target.value)}
+                      required
+                    >
+                      <option value="">Select a destination / city</option>
+                      {(availableCities.length > 0 ? availableCities : popularDestinations).map((dest, index) => (
+                        <option key={index} value={dest}>{dest}</option>
+                      ))}
+                    </select>
+                    <div className="ms-3 d-flex align-items-center">
+                      <small className="text-muted">City: <strong>{formData.destination || '—'}</strong></small>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Budget */}
@@ -318,18 +389,18 @@ function Destinations({ user }) {
                     <i className="bi bi-wallet2 text-success me-2"></i>
                     Total Budget: ₱{formData.budget.toLocaleString()}
                   </label>
-                  <input 
+                  <input
                     type="range"
                     className="form-range"
                     min="1000"
-                    max="50000"
-                    step="500"
+                    max="500000"
+                    step="1000"
                     value={formData.budget}
                     onChange={(e) => handleInputChange('budget', parseInt(e.target.value))}
                   />
                   <div className="d-flex justify-content-between small text-muted">
                     <span>₱1,000</span>
-                    <span>₱50,000</span>
+                    <span>₱500,000</span>
                   </div>
                 </div>
 
@@ -339,11 +410,11 @@ function Destinations({ user }) {
                     <i className="bi bi-pie-chart-fill text-primary me-2"></i>
                     Budget Allocation (%)
                   </label>
-                  
+
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label small">Accommodation ({formData.budgetAllocation.accommodation}%)</label>
-                      <input 
+                      <input
                         type="range"
                         className="form-range"
                         min="0"
@@ -353,10 +424,10 @@ function Destinations({ user }) {
                       />
                       <span className="small text-muted">₱{((formData.budget * formData.budgetAllocation.accommodation) / 100).toLocaleString()}</span>
                     </div>
-                    
+
                     <div className="col-md-6">
                       <label className="form-label small">Activities ({formData.budgetAllocation.activities}%)</label>
-                      <input 
+                      <input
                         type="range"
                         className="form-range"
                         min="0"
@@ -366,10 +437,10 @@ function Destinations({ user }) {
                       />
                       <span className="small text-muted">₱{((formData.budget * formData.budgetAllocation.activities) / 100).toLocaleString()}</span>
                     </div>
-                    
+
                     <div className="col-md-6">
                       <label className="form-label small">Food ({formData.budgetAllocation.food}%)</label>
-                      <input 
+                      <input
                         type="range"
                         className="form-range"
                         min="0"
@@ -379,10 +450,10 @@ function Destinations({ user }) {
                       />
                       <span className="small text-muted">₱{((formData.budget * formData.budgetAllocation.food) / 100).toLocaleString()}</span>
                     </div>
-                    
+
                     <div className="col-md-6">
                       <label className="form-label small">Transportation ({formData.budgetAllocation.transportation}%)</label>
-                      <input 
+                      <input
                         type="range"
                         className="form-range"
                         min="0"
@@ -393,11 +464,19 @@ function Destinations({ user }) {
                       <span className="small text-muted">₱{((formData.budget * formData.budgetAllocation.transportation) / 100).toLocaleString()}</span>
                     </div>
                   </div>
-                  
-                  <div className="alert alert-info mt-3 small">
-                    <i className="bi bi-info-circle me-2"></i>
-                    Total: {Object.values(formData.budgetAllocation).reduce((a, b) => a + b, 0)}%
-                  </div>
+
+                  {(() => {
+                    const totalAlloc = Object.values(formData.budgetAllocation).reduce((a, b) => a + b, 0);
+                    return (
+                      <div className={`mt-3 small alert ${totalAlloc > 100 ? 'alert-danger' : 'alert-info'}`}>
+                        <i className="bi bi-info-circle me-2"></i>
+                        Total: {totalAlloc}%
+                        {totalAlloc > 100 && (
+                          <strong className="ms-2">Allocation exceeds 100% — fix to continue</strong>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Dates */}
@@ -408,14 +487,14 @@ function Destinations({ user }) {
                       Start Date
                     </label>
                     <div className="input-group">
-                      <span 
+                      <span
                         className="input-group-text bg-white"
                         style={{ cursor: 'pointer' }}
                         onClick={() => document.getElementById('startDate').showPicker()}
                       >
                         <i className="bi bi-calendar3"></i>
                       </span>
-                      <input 
+                      <input
                         id="startDate"
                         type="date"
                         className="form-control form-control-lg"
@@ -433,14 +512,14 @@ function Destinations({ user }) {
                       End Date
                     </label>
                     <div className="input-group">
-                      <span 
+                      <span
                         className="input-group-text bg-white"
                         style={{ cursor: 'pointer' }}
                         onClick={() => document.getElementById('endDate').showPicker()}
                       >
                         <i className="bi bi-calendar3"></i>
                       </span>
-                      <input 
+                      <input
                         id="endDate"
                         type="date"
                         className="form-control form-control-lg"
@@ -460,7 +539,7 @@ function Destinations({ user }) {
                     <i className="bi bi-brightness-high-fill text-warning me-2"></i>
                     Preferred Time for Activities
                   </label>
-                  <select 
+                  <select
                     className="form-select form-select-lg"
                     value={formData.preferredTime}
                     onChange={(e) => handleInputChange('preferredTime', e.target.value)}
@@ -473,11 +552,11 @@ function Destinations({ user }) {
                 </div>
 
                 {/* Submit Button */}
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="btn btn-danger btn-lg w-100 py-3 fw-bold"
                   style={{ background: 'linear-gradient(to right, #FF385C, #E31C5F)', border: 'none' }}
-                  disabled={loading}
+                  disabled={loading || Object.values(formData.budgetAllocation).reduce((a,b)=>a+b,0) > 100}
                 >
                   {loading ? (
                     <>
@@ -551,6 +630,7 @@ function Destinations({ user }) {
                                 alt={place.name}
                                 className="card-img-top"
                                 style={{ height: '200px', objectFit: 'cover', opacity: isSelected ? 0.9 : 1 }}
+                                onClick={(e) => { e.stopPropagation(); setSelectedPlaceDetails(place.raw || place); }}
                               />
                               <div className="card-body">
                                 <h5 className="card-title fw-bold">{place.name}</h5>
@@ -658,9 +738,9 @@ function Destinations({ user }) {
                               Selected Places ({plan.selectedPlaces.length})
                             </h6>
                             <div className="row g-2">
-                              {plan.selectedPlaces.map((place, idx) => (
+                                {plan.selectedPlaces.map((place, idx) => (
                                 <div key={idx} className="col-12">
-                                  <div className="card border-0" style={{ backgroundColor: '#f8f9fa' }}>
+                                  <div className="card border-0" style={{ backgroundColor: '#f8f9fa', cursor: 'pointer' }} onClick={() => setSelectedPlaceDetails(place)}>
                                     <div className="card-body p-2">
                                       <div className="d-flex align-items-center">
                                         <img 
@@ -673,7 +753,7 @@ function Destinations({ user }) {
                                           <h6 className="mb-1 small fw-bold">{place.name}</h6>
                                           <div className="d-flex gap-1">
                                             <span className="badge bg-primary" style={{ fontSize: '0.7rem' }}>{place.type}</span>
-                                            <span className="badge bg-success" style={{ fontSize: '0.7rem' }}>₱{place.budget.toLocaleString()}</span>
+                                            <span className="badge bg-success" style={{ fontSize: '0.7rem' }}>₱{(place.budget||0).toLocaleString()}</span>
                                             <span className="badge bg-warning text-dark" style={{ fontSize: '0.7rem' }}>
                                               <i className="bi bi-star-fill"></i> {place.rating}
                                             </span>
@@ -691,6 +771,77 @@ function Destinations({ user }) {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+          {/* Place Detail Modal */}
+          {selectedPlaceDetails && (
+            <div
+              className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+              style={{ zIndex: 1050, background: 'rgba(0,0,0,0.6)' }}
+              onClick={(e) => { if (e.target === e.currentTarget) setSelectedPlaceDetails(null); }}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="bg-white shadow-lg rounded" style={{ width: '90%', maxWidth: '900px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
+                <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
+                  <div className="col-md-6 d-flex align-items-center justify-content-center" style={{ background: '#f8f9fa' }}>
+                    <img src={(selectedPlaceDetails.images && selectedPlaceDetails.images[0]) || selectedPlaceDetails.image || selectedPlaceDetails.imageUrl || 'https://via.placeholder.com/600x400'} alt={selectedPlaceDetails.name || selectedPlaceDetails.destinationName || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <div className="col-md-6 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
+                    <div className="d-flex justify-content-between align-items-start mb-2">
+                      <div>
+                        <h3 className="fw-bold mb-1">{selectedPlaceDetails.destinationName || selectedPlaceDetails.name || selectedPlaceDetails.name}</h3>
+                        <div className="text-muted small">{selectedPlaceDetails.cityName || selectedPlaceDetails.city || ''}{selectedPlaceDetails.regionName ? `, ${selectedPlaceDetails.regionName}` : ''}</div>
+                      </div>
+                      <div className="text-warning text-end">
+                        <div><i className="bi bi-star-fill"></i> {selectedPlaceDetails.rating || selectedPlaceDetails.raw?.rating || '—'}</div>
+                      </div>
+                    </div>
+                    <p className="text-muted small mb-3">{selectedPlaceDetails.description || selectedPlaceDetails.raw?.description || ''}</p>
+                    <div className="mb-3">
+                      {(selectedPlaceDetails.category || selectedPlaceDetails.tags || []).slice?.(0,5).map((tag, i) => (
+                        <span key={i} className="badge bg-light text-dark border me-1">{tag}</span>
+                      ))}
+                    </div>
+                    <div className="mt-auto">
+                      <div className="mb-3">
+                        <strong>Estimated Budget:</strong>
+                        <div className="text-muted small">{selectedPlaceDetails.budget || selectedPlaceDetails.raw?.budget || 'Varies'}</div>
+                      </div>
+                      <div className="card p-3 border">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <div>
+                            <div className="small text-muted">Contact</div>
+                            <div className="fw-bold">{selectedPlaceDetails.hostName || selectedPlaceDetails.host || selectedPlaceDetails.raw?.hostName || 'Local Host'}</div>
+                          </div>
+                          <div className="text-end small text-muted">Info</div>
+                        </div>
+                        <div className="small mb-2">
+                          Phone: {selectedPlaceDetails.phone || selectedPlaceDetails.raw?.phone || 'Not provided'}
+                        </div>
+                        <div className="small mb-3">
+                          Email: {selectedPlaceDetails.email || selectedPlaceDetails.raw?.email || 'Not provided'}
+                        </div>
+                        <div className="d-flex gap-2">
+                          { (selectedPlaceDetails.phone || selectedPlaceDetails.raw?.phone) ? (
+                            <a className="btn btn-outline-primary btn-sm" href={`tel:${selectedPlaceDetails.phone || selectedPlaceDetails.raw?.phone}`}>Call</a>
+                          ) : (
+                            <button className="btn btn-outline-secondary btn-sm" disabled>Call</button>
+                          )}
+
+                          { (selectedPlaceDetails.email || selectedPlaceDetails.raw?.email) ? (
+                            <a className="btn btn-primary btn-sm" href={`mailto:${selectedPlaceDetails.email || selectedPlaceDetails.raw?.email}`}>Email</a>
+                          ) : (
+                            <button className="btn btn-secondary btn-sm" disabled>Email</button>
+                          )}
+
+                          <button className="btn btn-outline-dark btn-sm ms-auto" onClick={() => setSelectedPlaceDetails(null)}>Close</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

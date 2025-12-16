@@ -8,6 +8,7 @@ import HomePage from './pages/HomePage';
 import SmartRecommendationsPage from './pages/SmartRecommendationsPage';
 import BudgetFriendlyPage from './pages/BudgetFriendlyPage';
 import EasyPlanningPage from './pages/EasyPlanningPage';
+import TripsPage from './pages/TripsPage';
 import SearchResultsPage from './pages/SearchResultsPage';
 import AdminLoginPage from './admin/AdminLoginPage';
 import AdminDashboardPage from './admin/AdminDashboardPage';
@@ -174,7 +175,12 @@ function App() {
 
     if (page === 'smart-recommendations') return navigate('/smart-recommendations');
     if (page === 'budget-friendly') return navigate('/budget-friendly');
-    if (page === 'easy-planning') return navigate('/easy-planning');
+    if (page === 'easy-planning') {
+      // allow passing a plan object as navigation state to pre-fill the form
+      if (data) return navigate('/easy-planning', { state: data });
+      return navigate('/easy-planning');
+    }
+    if (page === 'trips') return navigate('/trips');
     if (page === 'admin-dashboard') {
       const section = data || 'dashboard';
       sessionStorage.setItem('sessionType', 'admin');
@@ -202,6 +208,7 @@ function App() {
         <Route path="/smart-recommendations" element={<SmartRecommendationsPage user={user} onNavigate={handleNavigate} />} />
         <Route path="/budget-friendly" element={<BudgetFriendlyPage user={user} onNavigate={handleNavigate} />} />
         <Route path="/easy-planning" element={<EasyPlanningPage user={user} onNavigate={handleNavigate} />} />
+        <Route path="/trips" element={<TripsPage user={user} onNavigate={handleNavigate} />} />
         <Route path="/search" element={<SearchResultsPage user={user} onNavigate={handleNavigate} searchQuery={searchQuery} />} />
         <Route path="/admin" element={<AdminLoginPage onNavigate={handleNavigate} />} />
         <Route path="/admin/:section" element={<AdminDashboardPage user={user} onNavigate={handleNavigate} authLoading={authLoading} />} />

@@ -212,7 +212,7 @@ function Header({ user, onShowAuth, onNavigate }) {
                       <div className="small text-muted">{user.email}</div>
                     </div>
                     <a className="dropdown-item py-2" href="#">Profile</a>
-                    <a className="dropdown-item py-2" href="#">Trips</a>
+                    <a className="dropdown-item py-2" href="#" onClick={(e) => { e.preventDefault(); if (onNavigate) onNavigate('trips'); }}>Trips</a>
                     <a className="dropdown-item py-2" href="#">Wishlists</a>
                     <hr className="dropdown-divider" />
                     <a className="dropdown-item py-2" href="#">Help Center</a>

@@ -1,9 +1,13 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import Header from '../components/Header';
 import Destinations from '../components/Destinations';
 import Footer from '../components/Footer';
 
 function EasyPlanningPage({ user, onNavigate }) {
+  const location = useLocation();
+  const initialEditPlan = location?.state || null;
+
   return (
     <div>
       <Header user={user} onNavigate={onNavigate} />
@@ -18,7 +22,7 @@ function EasyPlanningPage({ user, onNavigate }) {
         </div>
 
         {user ? (
-          <Destinations user={user} />
+          <Destinations user={user} initialPlan={initialEditPlan} />
         ) : (
           <div className="text-center py-5">
             <i className="bi bi-lock text-muted" style={{ fontSize: '3rem' }}></i>
