@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase';
 
 function BudgetFriendlyPage({ user, onNavigate }) {
   const [filters, setFilters] = useState({
@@ -9,159 +11,56 @@ function BudgetFriendlyPage({ user, onNavigate }) {
     endDate: ''
   });
   const [showResults, setShowResults] = useState(false);
+  const [destinations, setDestinations] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedDestination, setSelectedDestination] = useState(null);
 
-  const destinations = [
-    {
-      id: 1,
-      name: 'Baguio City',
-      image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
-      description: 'Cool mountain climate with gardens, parks, and local markets',
-      estimatedCost: 8000,
-      duration: '3-4 days',
-      highlights: ['Burnham Park', 'Mines View Park', 'Strawberry Farm', 'Session Road'],
-      budgetBreakdown: {
-        accommodation: 3000,
-        food: 2000,
-        activities: 2000,
-        transport: 1000
-      }
-    },
-    {
-      id: 2,
-      name: 'Vigan, Ilocos Sur',
-      image: 'https://images.unsplash.com/photo-1555993539-1732b0258235?w=600',
-      description: 'Historic Spanish colonial town with preserved architecture',
-      estimatedCost: 10000,
-      duration: '2-3 days',
-      highlights: ['Calle Crisologo', 'Bantay Bell Tower', 'Crisologo Museum', 'Vigan Cathedral'],
-      budgetBreakdown: {
-        accommodation: 3500,
-        food: 2500,
-        activities: 2000,
-        transport: 2000
-      }
-    },
-    {
-      id: 3,
-      name: 'Puerto Galera',
-      image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=600',
-      description: 'Beach paradise with diving spots and water activities',
-      estimatedCost: 12000,
-      duration: '3-4 days',
-      highlights: ['White Beach', 'Tamaraw Falls', 'Snorkeling', 'Island Hopping'],
-      budgetBreakdown: {
-        accommodation: 4000,
-        food: 3000,
-        activities: 3000,
-        transport: 2000
-      }
-    },
-    {
-      id: 4,
-      name: 'Sagada',
-      image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
-      description: 'Mountain town famous for hanging coffins and caves',
-      estimatedCost: 9000,
-      duration: '3-4 days',
-      highlights: ['Hanging Coffins', 'Sumaguing Cave', 'Kiltepan Peak', 'Echo Valley'],
-      budgetBreakdown: {
-        accommodation: 2500,
-        food: 2000,
-        activities: 2500,
-        transport: 2000
-      }
-    },
-    {
-      id: 5,
-      name: 'Batanes',
-      image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
-      description: 'Northernmost province with rolling hills and stone houses',
-      estimatedCost: 25000,
-      duration: '4-5 days',
-      highlights: ['Basco Lighthouse', 'Marlboro Hills', 'Sabtang Island', 'Stone Houses'],
-      budgetBreakdown: {
-        accommodation: 8000,
-        food: 5000,
-        activities: 5000,
-        transport: 7000
-      }
-    },
-    {
-      id: 6,
-      name: 'Camiguin',
-      image: 'https://images.unsplash.com/photo-1544551763046-e078b8c5f0ac?w=600',
-      description: 'Island born of fire with volcanoes and hot springs',
-      estimatedCost: 15000,
-      duration: '3-4 days',
-      highlights: ['White Island', 'Sunken Cemetery', 'Katibawasan Falls', 'Hot Springs'],
-      budgetBreakdown: {
-        accommodation: 5000,
-        food: 3500,
-        activities: 4000,
-        transport: 2500
-      }
-    },
-    {
-      id: 7,
-      name: 'Siargao',
-      image: 'https://images.unsplash.com/photo-1544551763046-e078b8c5f0ac?w=600',
-      description: 'Surfing capital with pristine beaches and laid-back vibes',
-      estimatedCost: 18000,
-      duration: '4-5 days',
-      highlights: ['Cloud 9', 'Sugba Lagoon', 'Magpupungko Pools', 'Island Hopping'],
-      budgetBreakdown: {
-        accommodation: 6000,
-        food: 4000,
-        activities: 5000,
-        transport: 3000
-      }
-    },
-    {
-      id: 8,
-      name: 'El Nido, Palawan',
-      image: 'https://images.unsplash.com/photo-1583037189850-1921ae7c6c22?w=600',
-      description: 'Paradise with limestone cliffs and crystal clear waters',
-      estimatedCost: 20000,
-      duration: '4-5 days',
-      highlights: ['Island Hopping', 'Big Lagoon', 'Small Lagoon', 'Secret Beach'],
-      budgetBreakdown: {
-        accommodation: 7000,
-        food: 5000,
-        activities: 5000,
-        transport: 3000
-      }
-    },
-    {
-      id: 9,
-      name: 'Bohol',
-      image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=600',
-      description: 'Home of Chocolate Hills and adorable tarsiers',
-      estimatedCost: 14000,
-      duration: '3-4 days',
-      highlights: ['Chocolate Hills', 'Tarsier Sanctuary', 'Loboc River', 'Panglao Beach'],
-      budgetBreakdown: {
-        accommodation: 5000,
-        food: 3000,
-        activities: 4000,
-        transport: 2000
-      }
-    },
-    {
-      id: 10,
-      name: 'Hundred Islands',
-      image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=600',
-      description: 'National park with 124 islands and diverse marine life',
-      estimatedCost: 7000,
-      duration: '2-3 days',
-      highlights: ['Island Hopping', 'Snorkeling', 'Kayaking', 'Quezon Island'],
-      budgetBreakdown: {
-        accommodation: 2500,
-        food: 1500,
-        activities: 2000,
-        transport: 1000
-      }
+  useEffect(() => {
+    loadDestinations();
+  }, []);
+
+  const loadDestinations = async () => {
+    try {
+      setLoading(true);
+      const destinationsRef = collection(db, 'destinations');
+      const snapshot = await getDocs(destinationsRef);
+
+      const list = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data() || {};
+
+        // gather images from multiple possible fields
+        let images = Array.isArray(data.images) ? data.images.slice() : [];
+        const legacyFields = ['imageUrl', 'image', 'image1', 'mainImage', 'photo1'];
+        for (const key of legacyFields) {
+          if (data[key] && !images.includes(data[key])) images.push(data[key]);
+        }
+
+        images = images.filter(Boolean);
+
+        list.push({
+          id: doc.id,
+          name: `${data.destinationName || data.name || ''}${data.cityName ? `, ${data.cityName}` : ''}`,
+          images: images,
+          image: images[0] || data.image || '',
+          description: data.description || data.summary || '',
+          estimatedCost: data.estimatedCost || data.estimated_cost || data.price || (typeof data.budget === 'number' ? data.budget : undefined),
+          duration: data.duration || data.length || '',
+          highlights: data.highlights || data.tags || [],
+          budgetBreakdown: data.budgetBreakdown || data.breakdown || {},
+          phone: data.phone || data.contactPhone || '',
+          email: data.email || data.contactEmail || '',
+          hostName: data.hostName || data.host || ''
+        });
+      });
+
+      setDestinations(list);
+    } catch (error) {
+      console.error('Error loading destinations:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const calculateDays = () => {
     if (filters.startDate && filters.endDate) {
@@ -189,12 +88,77 @@ function BudgetFriendlyPage({ user, onNavigate }) {
   };
 
   const getFilteredDestinations = () => {
+    const parseCost = (dest) => {
+      if (typeof dest.estimatedCost === 'number') return dest.estimatedCost;
+      if (!dest.estimatedCost && dest.budgetBreakdown) {
+        // try to sum breakdown values
+        const vals = Object.values(dest.budgetBreakdown).filter(v => typeof v === 'number');
+        if (vals.length) return vals.reduce((s, v) => s + v, 0);
+      }
+      if (typeof dest.estimatedCost === 'string') {
+        const nums = dest.estimatedCost.replace(/[,₱\s]/g, '').match(/\d+/g);
+        if (nums && nums.length) return parseInt(nums[0], 10);
+      }
+      return Infinity;
+    };
+
     return destinations
-      .filter(dest => dest.estimatedCost <= filters.budget)
-      .sort((a, b) => a.estimatedCost - b.estimatedCost);
+      .filter(dest => parseCost(dest) <= filters.budget)
+      .sort((a, b) => parseCost(a) - parseCost(b));
   };
 
   const tripDays = calculateDays();
+
+  // Simple image carousel component (local to this page)
+  function ImageCarousel({ images = [], height = '200px', fit = 'cover' }) {
+    const [idx, setIdx] = useState(0);
+    const len = images?.length || 0;
+    if (len === 0) {
+      return (
+        <div className="card-img-top d-flex align-items-center justify-content-center" style={{ height, background: '#f0f0f0' }}>
+          <img
+            src={'https://via.placeholder.com/600x400?text=No+Image'}
+            alt="No image"
+            style={{ maxHeight: '100%', maxWidth: '100%', objectFit: fit }}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="position-relative d-flex align-items-center justify-content-center" style={{ height, background: fit === 'contain' ? '#000' : 'transparent' }}>
+        <img
+          src={images[idx]}
+          className="card-img-top"
+          alt={`Image ${idx + 1}`}
+          style={{ height: '100%', width: '100%', objectFit: fit, transition: 'opacity .25s ease-in-out' }}
+          onClick={(e) => e.stopPropagation()}
+        />
+        {len > 1 && (
+          <>
+            <button
+              type="button"
+              className="btn btn-sm btn-light"
+              style={{ position: 'absolute', top: '50%', left: 8, transform: 'translateY(-50%)' }}
+              onClick={(e) => { e.stopPropagation(); setIdx((idx - 1 + len) % len); }}
+              aria-label="Previous image"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-light"
+              style={{ position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)' }}
+              onClick={(e) => { e.stopPropagation(); setIdx((idx + 1) % len); }}
+              aria-label="Next image"
+            >
+              ›
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -330,17 +294,19 @@ function BudgetFriendlyPage({ user, onNavigate }) {
             <div className="row g-4">
               {getFilteredDestinations().map((destination) => (
                 <div key={destination.id} className="col-md-6 col-lg-4">
-                  <div className="card border-0 shadow-sm h-100">
-                    <img 
-                      src={destination.image} 
-                      className="card-img-top" 
-                      alt={destination.name}
-                      style={{ height: '200px', objectFit: 'cover' }}
-                    />
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedDestination(destination)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setSelectedDestination(destination); }}
+                    className="card border-0 shadow-sm h-100"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <ImageCarousel images={destination.images || (destination.image ? [destination.image] : [])} height={'200px'} />
                     <div className="card-body">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <h5 className="card-title fw-bold mb-0">{destination.name}</h5>
-                        <span className="badge bg-success">₱{destination.estimatedCost.toLocaleString()}</span>
+                        <span className="badge bg-success">{(destination.estimatedCost && typeof destination.estimatedCost === 'number') ? (`₱${destination.estimatedCost.toLocaleString()}`) : 'Varies'}</span>
                       </div>
                       <p className="card-text text-muted small mb-3">{destination.description}</p>
                       
@@ -351,34 +317,10 @@ function BudgetFriendlyPage({ user, onNavigate }) {
                         </small>
                       </div>
 
-                      {/* Budget Breakdown */}
-                      <div className="mb-3">
-                        <h6 className="small fw-bold mb-2">Budget Breakdown:</h6>
-                        <div className="small">
-                          <div className="d-flex justify-content-between mb-1">
-                            <span><i className="bi bi-house me-1"></i> Accommodation</span>
-                            <span>₱{destination.budgetBreakdown.accommodation.toLocaleString()}</span>
-                          </div>
-                          <div className="d-flex justify-content-between mb-1">
-                            <span><i className="bi bi-cup-hot me-1"></i> Food</span>
-                            <span>₱{destination.budgetBreakdown.food.toLocaleString()}</span>
-                          </div>
-                          <div className="d-flex justify-content-between mb-1">
-                            <span><i className="bi bi-star me-1"></i> Activities</span>
-                            <span>₱{destination.budgetBreakdown.activities.toLocaleString()}</span>
-                          </div>
-                          <div className="d-flex justify-content-between">
-                            <span><i className="bi bi-bus-front me-1"></i> Transport</span>
-                            <span>₱{destination.budgetBreakdown.transport.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Highlights */}
                       <div>
                         <h6 className="small fw-bold mb-2">Highlights:</h6>
                         <div className="d-flex flex-wrap gap-1">
-                          {destination.highlights.map((highlight, idx) => (
+                          {(destination.highlights || []).map((highlight, idx) => (
                             <span key={idx} className="badge bg-light text-dark border small">
                               {highlight}
                             </span>
@@ -395,6 +337,84 @@ function BudgetFriendlyPage({ user, onNavigate }) {
               <div className="text-center py-5">
                 <i className="bi bi-emoji-frown text-muted" style={{ fontSize: '3rem' }}></i>
                 <p className="text-muted mt-3">No destinations found within your budget. Try increasing your budget.</p>
+              </div>
+            )}
+          
+            {/* Detail Modal for selected destination */}
+            {selectedDestination && (
+              <div
+                className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+                style={{ zIndex: 1050, background: 'rgba(0,0,0,0.6)' }}
+                onClick={(e) => { if (e.target === e.currentTarget) setSelectedDestination(null); }}
+                role="dialog"
+                aria-modal="true"
+              >
+                <div className="bg-white shadow-lg rounded" style={{ width: '90%', maxWidth: '1000px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
+                  <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
+                    <div className="col-md-7" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <ImageCarousel images={selectedDestination.images || (selectedDestination.image ? [selectedDestination.image] : [])} height={'100%'} fit={'contain'} />
+                    </div>
+                    <div className="col-md-5 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                          <h3 className="fw-bold mb-1">{selectedDestination.name}</h3>
+                          <div className="text-muted small">{selectedDestination.duration}</div>
+                        </div>
+                        <div className="text-warning text-end">
+                          <div><i className="bi bi-wallet2"></i> {(selectedDestination.estimatedCost && typeof selectedDestination.estimatedCost === 'number') ? `₱${selectedDestination.estimatedCost.toLocaleString()}` : 'Varies'}</div>
+                        </div>
+                      </div>
+
+                      <p className="text-muted small mb-3">{selectedDestination.description}</p>
+
+                      <div className="mb-3">
+                        {(selectedDestination.highlights || []).map((tag, idx) => (
+                          <span key={idx} className="badge bg-light text-dark border me-1">{tag}</span>
+                        ))}
+                      </div>
+
+                      <div className="mt-auto">
+                        <div className="mb-3">
+                          <strong>Estimated Budget:</strong>
+                          <div className="text-muted small">{(selectedDestination.estimatedCost && typeof selectedDestination.estimatedCost === 'number') ? `₱${selectedDestination.estimatedCost.toLocaleString()}` : (selectedDestination.budgetBreakdown ? 'See breakdown' : 'Varies')}</div>
+                        </div>
+
+                        <div className="card p-3 border">
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                              <div className="small text-muted">Contact</div>
+                              <div className="fw-bold">{selectedDestination.hostName || 'Local Host'}</div>
+                            </div>
+                            <div className="text-end small text-muted">Verified</div>
+                          </div>
+
+                          <div className="small mb-2">
+                            Phone: {selectedDestination.phone || 'Not provided'}
+                          </div>
+                          <div className="small mb-3">
+                            Email: {selectedDestination.email || 'Not provided'}
+                          </div>
+
+                          <div className="d-flex gap-2">
+                            { (selectedDestination.phone) ? (
+                              <a className="btn btn-outline-primary btn-sm" href={`tel:${selectedDestination.phone}`}>Call</a>
+                            ) : (
+                              <button className="btn btn-outline-secondary btn-sm" disabled>Call</button>
+                            )}
+
+                            { (selectedDestination.email) ? (
+                              <a className="btn btn-primary btn-sm" href={`mailto:${selectedDestination.email}`}>Email</a>
+                            ) : (
+                              <button className="btn btn-secondary btn-sm" disabled>Email</button>
+                            )}
+
+                            <button className="btn btn-outline-dark btn-sm ms-auto" onClick={() => setSelectedDestination(null)}>Close</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
