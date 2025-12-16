@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { signOut } from 'firebase/auth';
-import { auth } from '../../firebase';
+import { auth, rtdb } from '../../firebase';
+import { ref as rtdbRef, set as rtdbSet, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
 import Auth from './Auth';
 
 function Header({ user, onShowAuth, onNavigate }) {
@@ -50,6 +51,15 @@ function Header({ user, onShowAuth, onNavigate }) {
 
   const handleLogout = async () => {
     try {
+      // mark RTDB presence offline immediately (best-effort)
+      try {
+        if (user?.uid && rtdb) {
+          // remove the RTDB presence node to avoid stale 'online' values
+          await rtdbSet(rtdbRef(rtdb, `status/${user.uid}`), null);
+        }
+      } catch (err) {
+        console.warn('Failed to set RTDB offline status on logout', err);
+      }
       await signOut(auth);
       setShowMenu(false);
       alert('Logged out successfully!');

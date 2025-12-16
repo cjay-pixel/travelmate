@@ -1,6 +1,7 @@
  import React, { useState, useEffect } from 'react';
-import { db } from '../../../firebase';
+import { db, rtdb } from '../../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { ref as rtdbRef, onValue as onRtdbValue } from 'firebase/database';
 
 const SUPER_ADMIN_EMAIL = "superadmin@gmail.com";
 
@@ -8,9 +9,24 @@ function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [statuses, setStatuses] = useState({});
 
   useEffect(() => {
     fetchUsers();
+    // subscribe to realtime presence
+    try {
+      const statusRef = rtdbRef(rtdb, 'status');
+      const unsubscribeStatus = onRtdbValue(statusRef, (snap) => {
+        setStatuses(snap.val() || {});
+      });
+
+      return () => {
+        if (unsubscribeStatus) unsubscribeStatus();
+      };
+    } catch (err) {
+      // RTDB may not be available in some environments; ignore
+      console.warn('RTDB presence subscription failed', err);
+    }
   }, []);
 
   const fetchUsers = async () => {
@@ -24,9 +40,19 @@ function Users() {
       snapshot.forEach((doc) => {
         const userData = doc.data();
         // All documents in 'users' collection are regular users
+        // Derive `active` from `lastActive` recency (2 minutes)
+        const lastActive = userData?.lastActive;
+        const ACTIVE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+        let isActive = false;
+        if (lastActive && lastActive.seconds) {
+          const last = new Date(lastActive.seconds * 1000).getTime();
+          if (Date.now() - last <= ACTIVE_THRESHOLD_MS) isActive = true;
+        }
         usersList.push({
           id: doc.id,
-          ...userData
+          ...userData,
+          active: isActive,
+          lastActive
         });
       });
       
@@ -128,15 +154,29 @@ function Users() {
                       )}
                     </td>
                     <td>
-                      <span 
-                        className="badge rounded-pill px-3 py-2" 
-                        style={{ 
-                          backgroundColor: '#00848515', 
-                          color: '#008485' 
-                        }}
-                      >
-                        Active
-                      </span>
+                      {(() => {
+                        const status = statuses?.[user.id];
+                        const isOnline = status?.state === 'online';
+                        const displayedActive = isOnline || !!user.active;
+                        const title = status?.last_changed
+                          ? new Date(status.last_changed).toLocaleString()
+                          : user.lastActive
+                          ? new Date(user.lastActive.seconds * 1000).toLocaleString()
+                          : 'No activity recorded';
+
+                        return (
+                          <span
+                            className="badge rounded-pill px-3 py-2"
+                            style={{
+                              backgroundColor: displayedActive ? '#00848515' : '#6c757d15',
+                              color: displayedActive ? '#008485' : '#6c757d'
+                            }}
+                            title={title}
+                          >
+                            {displayedActive ? 'Active' : 'Inactive'}
+                          </span>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}

@@ -3,6 +3,7 @@ import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getDatabase } from 'firebase/database';
 import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
 // TODO: Add SDKs for Firebase products that you want to use
@@ -13,6 +14,9 @@ import { getStorage } from "firebase/storage";
 const firebaseConfig = {
   apiKey: "AIzaSyB9G_nGKl7Cd45BIKryHvixVWgb3tWzG34",
   authDomain: "travelmateai-01.firebaseapp.com",
+  // Realtime Database URL (required for RTDB presence)
+  // Use the regional RTDB endpoint (asia-southeast1) to match the database location
+  databaseURL: "https://travelmateai-01-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "travelmateai-01",
   storageBucket: "travelmateai-01.firebasestorage.app",
   messagingSenderId: "987229598058",
@@ -26,6 +30,8 @@ const analytics = getAnalytics(app);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
+// Realtime Database (for presence)
+export const rtdb = getDatabase(app);
 
 // Enable auth persistence (stay logged in after page reload)
 setPersistence(auth, browserLocalPersistence).catch((error) => {

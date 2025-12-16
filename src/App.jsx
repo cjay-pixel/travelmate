@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, db, rtdb } from '../firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ref as rtdbRef, set as rtdbSet, onDisconnect as rtdbOnDisconnectFn, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import SmartRecommendationsPage from './pages/SmartRecommendationsPage';
@@ -29,7 +31,23 @@ function App() {
       setAuthLoading(false);
     }, 3000);
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    let heartbeatInterval = null;
+    let rtdbOnDisconnect = null;
+    let rtdbStatusRef = null;
+    const sendHeartbeat = async (uid) => {
+      try {
+        // write lastActive timestamp to user's Firestore document (merge so we don't overwrite)
+        await setDoc(doc(db, 'users', uid), { lastActive: serverTimestamp() }, { merge: true });
+        // update realtime DB presence timestamp as well
+        if (rtdb && rtdbStatusRef) {
+          await rtdbSet(rtdbStatusRef, { state: 'online', last_changed: rtdbServerTimestamp() });
+        }
+      } catch (err) {
+        console.error('Failed to send heartbeat for user', uid, err);
+      }
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       clearTimeout(loadingTimeout);
       const sessionType = sessionStorage.getItem('sessionType');
       const isAdminPage = location.pathname === '/admin' || location.pathname.startsWith('/admin');
@@ -40,20 +58,61 @@ function App() {
         }
 
         if (isAdminPage && sessionType === 'user') {
-          auth.signOut();
+          try {
+            if (currentUser?.uid && rtdb) {
+                    // attempt to remove presence node if older session exists
+                    await rtdbSet(rtdbRef(rtdb, `status/${currentUser.uid}`), null);
+            }
+          } catch (err) {
+            console.warn('Failed to set RTDB offline status before signOut (sessionType mismatch)', err);
+          }
+          await auth.signOut();
           setUser(null);
           setAuthLoading(false);
           return;
         }
 
         if (!isAdminPage && sessionType === 'admin') {
-          auth.signOut();
+          try {
+            if (currentUser?.uid && rtdb) {
+              await rtdbSet(rtdbRef(rtdb, `status/${currentUser.uid}`), null);
+            }
+          } catch (err) {
+            console.warn('Failed to set RTDB offline status before signOut (sessionType mismatch)', err);
+          }
+          await auth.signOut();
           setUser(null);
           setAuthLoading(false);
           return;
         }
 
         setUser(currentUser);
+        // send initial heartbeat and start periodic updates
+        if (currentUser?.uid) {
+          // set up RTDB status ref and onDisconnect
+          try {
+            rtdbStatusRef = rtdbRef(rtdb, `status/${currentUser.uid}`);
+            // ensure server sets offline on disconnect
+            rtdbOnDisconnect = rtdbOnDisconnectFn(rtdbStatusRef);
+            await rtdbOnDisconnect.set({ state: 'offline', last_changed: rtdbServerTimestamp() });
+            // immediately set online
+            await rtdbSet(rtdbStatusRef, { state: 'online', last_changed: rtdbServerTimestamp() });
+          } catch (err) {
+            console.error('RTDB presence setup failed', err);
+          }
+
+          sendHeartbeat(currentUser.uid);
+          // update every 60 seconds while logged in
+          heartbeatInterval = setInterval(() => sendHeartbeat(currentUser.uid), 60000);
+          // also update when tab becomes visible
+          const handleVisibility = () => {
+            if (document.visibilityState === 'visible') sendHeartbeat(currentUser.uid);
+          };
+          document.addEventListener('visibilitychange', handleVisibility);
+          // ensure we remove this listener when auth changes
+          // store on the unsubscribe closure
+          unsubscribe._visibilityHandler = handleVisibility;
+        }
       } else {
         setUser(null);
         if (!isAdminPage) sessionStorage.removeItem('sessionType');
@@ -64,6 +123,17 @@ function App() {
 
     return () => {
       clearTimeout(loadingTimeout);
+      // clear heartbeat interval and listeners if set
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      if (unsubscribe && unsubscribe._visibilityHandler) {
+        document.removeEventListener('visibilitychange', unsubscribe._visibilityHandler);
+      }
+      // set RTDB status offline and cancel onDisconnect
+      // clear RTDB onDisconnect and set offline (don't await in cleanup)
+      if (rtdbOnDisconnect && rtdbStatusRef) {
+        rtdbOnDisconnect.cancel().catch((err) => console.error('Failed to cancel RTDB onDisconnect', err));
+        rtdbSet(rtdbStatusRef, null).catch((err) => console.error('Failed to remove RTDB presence node', err));
+      }
       unsubscribe();
     };
     // eslint-disable-next-line
@@ -73,8 +143,17 @@ function App() {
     if (page === 'admin-login') {
       sessionStorage.removeItem('sessionType');
       if (user) {
-        auth.signOut();
-        setUser(null);
+        (async () => {
+          try {
+            if (user?.uid && rtdb) {
+              await rtdbSet(rtdbRef(rtdb, `status/${user.uid}`), null);
+            }
+          } catch (err) {
+            console.warn('Failed to remove RTDB presence node before signOut (navigate admin-login)', err);
+          }
+          await auth.signOut();
+          setUser(null);
+        })();
       }
       navigate('/admin');
       return;
@@ -83,8 +162,17 @@ function App() {
     if (page === 'home') {
       sessionStorage.removeItem('sessionType');
       if (user) {
-        auth.signOut();
-        setUser(null);
+        (async () => {
+          try {
+            if (user?.uid && rtdb) {
+              await rtdbSet(rtdbRef(rtdb, `status/${user.uid}`), null);
+            }
+          } catch (err) {
+            console.warn('Failed to remove RTDB presence node before signOut (navigate home)', err);
+          }
+          await auth.signOut();
+          setUser(null);
+        })();
       }
       navigate('/');
       return;

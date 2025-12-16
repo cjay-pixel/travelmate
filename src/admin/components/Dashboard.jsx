@@ -111,7 +111,7 @@ function Dashboard({ stats, onRefresh }) {
                   </div>
                 </div>
                 <h6 className="text-muted mb-2 small">Active Today</h6>
-                <h3 className="mb-0 fw-bold">0</h3>
+                <h3 className="mb-0 fw-bold">{stats.activeToday ?? 0}</h3>
               </div>
             </div>
           </div>

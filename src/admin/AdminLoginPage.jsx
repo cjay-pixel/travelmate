@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../../firebase';
+import { auth, db, rtdb } from '../../firebase';
+import { ref as rtdbRef, set as rtdbSet, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
 import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, updateDoc, deleteField } from 'firebase/firestore';
 import { checkAdminStatus } from './adminUtils';
 
@@ -113,6 +114,13 @@ function AdminLoginPage({ onNavigate }) {
         onNavigate('admin-dashboard');
       } else {
         // Not an admin, sign them out
+        try {
+          if (auth.currentUser?.uid && rtdb) {
+            await rtdbSet(rtdbRef(rtdb, `status/${auth.currentUser.uid}`), null);
+          }
+        } catch (err) {
+          console.warn('Failed to set RTDB offline status before signOut in AdminLoginPage', err);
+        }
         await auth.signOut();
         setError('Access denied. You do not have admin privileges.');
       }

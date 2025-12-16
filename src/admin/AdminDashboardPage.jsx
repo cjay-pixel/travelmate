@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { auth, db } from '../../firebase';
+import { auth, db, rtdb } from '../../firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { ref as rtdbRef, onValue as onRtdbValue, set as rtdbSet, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
 import { checkAdminStatus } from './adminUtils';
 import ManageAdmins from './ManageAdmins';
 import Dashboard from './components/Dashboard';
@@ -20,7 +21,8 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
     totalUsers: 0,
     totalBookings: 0,
     totalDestinations: 0,
-    recentActivity: []
+    recentActivity: [],
+    activeToday: 0
   });
 
   const SESSION_TIMEOUT = 900000; // 15 minutes in milliseconds
@@ -36,6 +38,13 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
   const handleSessionTimeout = async () => {
     alert('Session expired due to inactivity. You will be logged out.');
     try {
+      try {
+        if (user?.uid && rtdb) {
+          await rtdbSet(rtdbRef(rtdb, `status/${user.uid}`), null);
+        }
+      } catch (err) {
+        console.warn('Failed to set RTDB offline status on session timeout', err);
+      }
       await auth.signOut();
       onNavigate('admin-login');
     } catch (error) {
@@ -87,6 +96,13 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
         if (!isAdmin) {
           // Not an admin, sign out and redirect
           console.log('Not an admin, redirecting to login');
+          try {
+            if (user?.uid && rtdb) {
+              await rtdbSet(rtdbRef(rtdb, `status/${user.uid}`), null);
+            }
+          } catch (err) {
+            console.warn('Failed to set RTDB offline status before signOut', err);
+          }
           await auth.signOut();
           onNavigate('admin-login');
           return;
@@ -103,6 +119,27 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
     
     verifyAdmin();
   }, [onNavigate, user, authLoading]);
+
+  // Listen for realtime presence updates from RTDB and update activeToday
+  useEffect(() => {
+    try {
+      const statusRef = rtdbRef(rtdb, 'status');
+      const unsubscribeStatus = onRtdbValue(statusRef, (snap) => {
+        const val = snap.val() || {};
+        let count = 0;
+        Object.values(val).forEach((s) => {
+          if (s && s.state === 'online') count += 1;
+        });
+        setStats((prev) => ({ ...prev, activeToday: count }));
+      });
+
+      return () => {
+        if (unsubscribeStatus) unsubscribeStatus();
+      };
+    } catch (err) {
+      console.warn('RTDB status listener failed', err);
+    }
+  }, []);
 
   useEffect(() => {
     // Update active section when route param or prop changes
@@ -127,11 +164,24 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
       console.log('Trip Plans count:', tripPlansSnapshot.size);
       console.log('Destinations count:', destinationsSnapshot.size);
       
+      // Compute active users based on `lastActive` recency (2 minutes)
+      const ACTIVE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+      let activeCount = 0;
+      usersSnapshot.forEach((doc) => {
+        const data = doc.data();
+        const lastActive = data?.lastActive;
+        if (lastActive && lastActive.seconds) {
+          const last = new Date(lastActive.seconds * 1000).getTime();
+          if (Date.now() - last <= ACTIVE_THRESHOLD_MS) activeCount += 1;
+        }
+      });
+
       setStats({
         totalUsers: usersSnapshot.size,
         totalBookings: tripPlansSnapshot.size,
         totalDestinations: destinationsSnapshot.size,
-        recentActivity: []
+        recentActivity: [],
+        activeToday: activeCount
       });
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -146,6 +196,13 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
     if (confirmLogout) {
       try {
         sessionStorage.removeItem('sessionType');
+        try {
+          if (user?.uid && rtdb) {
+            await rtdbSet(rtdbRef(rtdb, `status/${user.uid}`), null);
+          }
+        } catch (err) {
+          console.warn('Failed to set RTDB offline status on admin logout', err);
+        }
         await auth.signOut();
         onNavigate('admin-login');
       } catch (error) {
