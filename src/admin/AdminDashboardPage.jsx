@@ -9,8 +9,7 @@ import Dashboard from './components/Dashboard';
 import Users from './components/Users';
 import Destinations from './components/Destinations';
 import Preferences from './components/Preferences';
-import Messages from './components/Messages';
-import Analytics from './components/Analytics';
+// Messages and Analytics removed from admin dashboard per request
 
 function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoading }) {
   const params = useParams();
@@ -19,7 +18,6 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [stats, setStats] = useState({
     totalUsers: 0,
-    totalBookings: 0,
     totalDestinations: 0,
     recentActivity: [],
     activeToday: 0
@@ -157,11 +155,9 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
       console.log('Loading dashboard data...');
       // Fetch real counts from Firestore
       const usersSnapshot = await getDocs(collection(db, 'users'));
-      const tripPlansSnapshot = await getDocs(collection(db, 'tripPlans'));
       const destinationsSnapshot = await getDocs(collection(db, 'destinations'));
       
       console.log('Users count:', usersSnapshot.size);
-      console.log('Trip Plans count:', tripPlansSnapshot.size);
       console.log('Destinations count:', destinationsSnapshot.size);
       
       // Compute active users based on `lastActive` recency (2 minutes)
@@ -178,7 +174,6 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
 
       setStats({
         totalUsers: usersSnapshot.size,
-        totalBookings: tripPlansSnapshot.size,
         totalDestinations: destinationsSnapshot.size,
         recentActivity: [],
         activeToday: activeCount
@@ -308,36 +303,7 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
               Preferences
             </button>
 
-            <button
-              onClick={() => onNavigate('admin-dashboard', 'messages')}
-              className={`nav-link text-start rounded-3 d-flex align-items-center px-3 py-2 border-0 ${
-                activeSection === 'messages' ? 'active' : ''
-              }`}
-              style={{
-                backgroundColor: activeSection === 'messages' ? '#FF385C15' : 'transparent',
-                color: activeSection === 'messages' ? '#FF385C' : '#717171',
-                fontWeight: activeSection === 'messages' ? '600' : 'normal'
-              }}
-            >
-              <i className="bi bi-chat-dots me-3" style={{ fontSize: '1.1rem' }}></i>
-              Messages
-              {/* <span className="badge rounded-pill ms-auto" style={{ backgroundColor: '#FF385C', color: 'white' }}>3</span> */}
-            </button>
-
-            <button
-              onClick={() => onNavigate('admin-dashboard', 'analytics')}
-              className={`nav-link text-start rounded-3 d-flex align-items-center px-3 py-2 border-0 ${
-                activeSection === 'analytics' ? 'active' : ''
-              }`}
-              style={{
-                backgroundColor: activeSection === 'analytics' ? '#FF385C15' : 'transparent',
-                color: activeSection === 'analytics' ? '#FF385C' : '#717171',
-                fontWeight: activeSection === 'analytics' ? '600' : 'normal'
-              }}
-            >
-              <i className="bi bi-bar-chart me-3" style={{ fontSize: '1.1rem' }}></i>
-              Analytics
-            </button>
+            
 
             <hr className="my-3" />
 
@@ -421,8 +387,6 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
           {activeSection === 'users' && <Users />}
           {activeSection === 'destinations' && <Destinations />}
           {activeSection === 'preferences' && <Preferences />}
-          {activeSection === 'messages' && <Messages />}
-          {activeSection === 'analytics' && <Analytics />}
           {activeSection === 'admins' && <ManageAdmins />}
         </div>
       </div>

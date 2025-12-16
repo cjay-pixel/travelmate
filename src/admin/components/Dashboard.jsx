@@ -25,7 +25,7 @@ function Dashboard({ stats, onRefresh }) {
 
       {/* Statistics Cards */}
       <div className="row g-3 g-md-4 mb-4">
-        <div className="col-6 col-lg-3">
+        <div className="col-12 col-md-6 col-lg-4">
           <div className="card border-0 shadow-sm h-100 rounded-4" style={{ transition: 'transform 0.2s' }}>
             <div className="card-body p-3 p-md-4">
               <div className="d-flex flex-column">
@@ -48,30 +48,9 @@ function Dashboard({ stats, onRefresh }) {
           </div>
         </div>
 
-        <div className="col-6 col-lg-3">
-          <div className="card border-0 shadow-sm h-100 rounded-4" style={{ transition: 'transform 0.2s' }}>
-            <div className="card-body p-3 p-md-4">
-              <div className="d-flex flex-column">
-                <div className="d-flex align-items-center justify-content-between mb-3">
-                  <div 
-                    className="rounded-circle d-flex align-items-center justify-content-center"
-                    style={{ 
-                      width: '48px', 
-                      height: '48px', 
-                      backgroundColor: '#00848515'
-                    }}
-                  >
-                    <i className="bi bi-calendar-check-fill" style={{ fontSize: '1.5rem', color: '#008485' }}></i>
-                  </div>
-                </div>
-                <h6 className="text-muted mb-2 small">Bookings</h6>
-                <h3 className="mb-0 fw-bold">{stats.totalBookings}</h3>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Bookings card removed */}
 
-        <div className="col-6 col-lg-3">
+        <div className="col-12 col-md-6 col-lg-4">
           <div className="card border-0 shadow-sm h-100 rounded-4" style={{ transition: 'transform 0.2s' }}>
             <div className="card-body p-3 p-md-4">
               <div className="d-flex flex-column">
@@ -94,7 +73,7 @@ function Dashboard({ stats, onRefresh }) {
           </div>
         </div>
 
-        <div className="col-6 col-lg-3">
+        <div className="col-12 col-md-6 col-lg-4">
           <div className="card border-0 shadow-sm h-100 rounded-4" style={{ transition: 'transform 0.2s' }}>
             <div className="card-body p-3 p-md-4">
               <div className="d-flex flex-column">
