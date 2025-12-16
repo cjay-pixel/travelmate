@@ -80,6 +80,13 @@ function SmartRecommendationsPage({ user, onNavigate }) {
           budget: data.budget,
           cityName: data.cityName,
           regionName: data.regionName
+          ,
+          // contact fields (support multiple possible field names)
+          phone: data.phone || data.contactPhone || '',
+          contactPhone: data.contactPhone || data.phone || '',
+          email: data.email || data.contactEmail || '',
+          contactEmail: data.contactEmail || data.email || '',
+          hostName: data.hostName || data.host || ''
         });
       });
       
@@ -219,27 +226,28 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
   };
 
   // Simple image carousel component (local to this page)
-  function ImageCarousel({ images = [], height = '200px' }) {
+  function ImageCarousel({ images = [], height = '200px', fit = 'cover' }) {
     const [idx, setIdx] = useState(0);
     const len = images?.length || 0;
     if (len === 0) {
       return (
-        <img
-          src={'https://via.placeholder.com/600x400?text=No+Image'}
-          className="card-img-top"
-          alt="No image"
-          style={{ height, objectFit: 'cover' }}
-        />
+        <div className="card-img-top d-flex align-items-center justify-content-center" style={{ height, background: '#f0f0f0' }}>
+          <img
+            src={'https://via.placeholder.com/600x400?text=No+Image'}
+            alt="No image"
+            style={{ maxHeight: '100%', maxWidth: '100%', objectFit: fit }}
+          />
+        </div>
       );
     }
 
     return (
-      <div className="position-relative" style={{ height }}>
+      <div className="position-relative d-flex align-items-center justify-content-center" style={{ height, background: fit === 'contain' ? '#000' : 'transparent' }}>
         <img
           src={images[idx]}
           className="card-img-top"
           alt={`Image ${idx + 1}`}
-          style={{ height, objectFit: 'cover', width: '100%' }}
+          style={{ height: '100%', width: '100%', objectFit: fit, transition: 'opacity .25s ease-in-out' }}
           onClick={(e) => e.stopPropagation()}
         />
         {len > 1 && (
@@ -410,12 +418,12 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
                 role="dialog"
                 aria-modal="true"
               >
-                <div className="bg-white shadow-lg rounded" style={{ width: '90%', maxWidth: '1000px', maxHeight: '90%', overflowY: 'auto' }}>
-                  <div className="row g-0">
-                    <div className="col-md-7">
-                      <ImageCarousel images={selectedDestination.images} height={'400px'} />
-                    </div>
-                    <div className="col-md-5 p-4 d-flex flex-column">
+                <div className="bg-white shadow-lg rounded" style={{ width: '90%', maxWidth: '1000px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
+                          <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
+                            <div className="col-md-7" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <ImageCarousel images={selectedDestination.images} height={'100%'} fit={'contain'} />
+                            </div>
+                            <div className="col-md-5 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div>
                           <h3 className="fw-bold mb-1">{selectedDestination.name}</h3>

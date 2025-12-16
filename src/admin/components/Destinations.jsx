@@ -20,7 +20,10 @@ function Destinations() {
     category: [],
     budget: '',
     rating: 5,
-    images: []
+    images: [],
+    hostName: '',
+    phone: '',
+    email: ''
   });
   const [imageFile1, setImageFile1] = useState(null);
   const [imageFile2, setImageFile2] = useState(null);
@@ -169,6 +172,9 @@ function Destinations() {
           budget: formData.budget,
           rating: parseFloat(formData.rating),
           images: finalImages.filter(Boolean),
+          hostName: formData.hostName || '',
+          phone: formData.phone || '',
+          email: formData.email || '',
           updatedAt: serverTimestamp()
         });
 
@@ -184,6 +190,9 @@ function Destinations() {
           budget: formData.budget,
           rating: parseFloat(formData.rating),
           images: finalImages.filter(Boolean),
+          hostName: formData.hostName || '',
+          phone: formData.phone || '',
+          email: formData.email || '',
           createdAt: serverTimestamp(),
           status: 'active'
         });
@@ -200,7 +209,10 @@ function Destinations() {
         category: [],
         budget: '',
         rating: 5,
-        images: []
+        images: [],
+        hostName: '',
+        phone: '',
+        email: ''
       });
       setImageFile1(null);
       setImageFile2(null);
@@ -246,7 +258,10 @@ function Destinations() {
         (destination.images && destination.images[0]) || '',
         (destination.images && destination.images[1]) || '',
         (destination.images && destination.images[2]) || ''
-      ]
+      ],
+      hostName: destination.hostName || destination.host || '',
+      phone: destination.phone || destination.contactPhone || '',
+      email: destination.email || destination.contactEmail || ''
     });
     setEditingId(destination.id);
     setShowAddForm(true);
@@ -419,6 +434,39 @@ function Destinations() {
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       required
                     ></textarea>
+                  </div>
+
+                  <div className="col-md-4 mb-3">
+                    <label className="form-label fw-semibold">Host / Contact Name</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="e.g., Juan Dela Cruz"
+                      value={formData.hostName}
+                      onChange={(e) => setFormData({ ...formData, hostName: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="col-md-4 mb-3">
+                    <label className="form-label fw-semibold">Phone</label>
+                    <input
+                      type="tel"
+                      className="form-control"
+                      placeholder="e.g., +63 912 345 6789"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="col-md-4 mb-3">
+                    <label className="form-label fw-semibold">Email</label>
+                    <input
+                      type="email"
+                      className="form-control"
+                      placeholder="contact@example.com"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    />
                   </div>
 
                   <div className="col-12 mb-3">
