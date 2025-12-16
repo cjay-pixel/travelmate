@@ -120,8 +120,7 @@ function Header({ user, onShowAuth, onNavigate }) {
             onClick={handleLogoClick}
             style={{ cursor: 'pointer' }}
           >
-            <i className="bi bi-airplane-fill text-danger fs-3 me-2"></i>
-            <span className="fw-bold fs-4">TravelMate</span>
+            <img src="/travelmate-ai.png" alt="TravelMate" style={{ height: 28, width: 'auto', marginRight: 12 }} />
           </a>
 
           {/* Search Bar - Desktop */}
