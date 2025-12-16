@@ -161,19 +161,7 @@ function App() {
 
     if (page === 'home') {
       sessionStorage.removeItem('sessionType');
-      if (user) {
-        (async () => {
-          try {
-            if (user?.uid && rtdb) {
-              await rtdbSet(rtdbRef(rtdb, `status/${user.uid}`), null);
-            }
-          } catch (err) {
-            console.warn('Failed to remove RTDB presence node before signOut (navigate home)', err);
-          }
-          await auth.signOut();
-          setUser(null);
-        })();
-      }
+      // Do not sign the user out when navigating to home — just clear sessionType
       navigate('/');
       return;
     }
