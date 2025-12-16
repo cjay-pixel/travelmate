@@ -193,7 +193,10 @@ export default function BestDestinations({ title = 'Best Destinations' }) {
             role="dialog"
             aria-modal="true"
           >
-            <div className="bg-white shadow-lg rounded" style={{ width: '90%', maxWidth: '1000px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
+            <div className="bg-white shadow-lg rounded position-relative" style={{ width: '90%', maxWidth: '1000px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
+              <div className="modal-close-overlay">
+                <button aria-label="Close" onClick={onClose}>✕</button>
+              </div>
               <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
                 <div className="col-md-7" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <ImageCarousel images={dest.images || (dest.image ? [dest.image] : [])} height={'100%'} fit={'contain'} />

@@ -66,3 +66,112 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* --- Card image defaults: keep consistent heights and cropping --- */
+.card .card-img-top {
+  height: var(--card-img-height, 200px) !important;
+  width: 100% !important;
+  object-fit: cover !important;
+  display: block;
+}
+
+/* A viewport for carousels (if used) */
+.card-image-viewport {
+  height: var(--card-img-height, 200px);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+}
+.card-image-viewport img {
+  width: 100%;
+  height: 100%;
+  object-fit: var(--card-img-fit, cover);
+}
+
+@media (max-width: 768px) {
+  :root { --card-img-height: 160px; }
+}
+@media (max-width: 480px) {
+  :root { --card-img-height: 140px; }
+}
+
+/* --- Modal/dialog image handling --- */
+/* Limit image area inside modals so the details column remains visible and scrollable. */
+.position-fixed[role="dialog"] .row.g-0 {
+  display: flex;
+  flex-wrap: nowrap;
+}
+.position-fixed[role="dialog"] .col-md-7 {
+  /* image area */
+  flex: 0 0 60%;
+  max-width: 60%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.position-fixed[role="dialog"] .col-md-5 {
+  /* details area */
+  flex: 0 0 40%;
+  max-width: 40%;
+  overflow-y: auto;
+}
+
+/* On small screens, stack image above details and limit image height */
+@media (max-width: 768px) {
+  .position-fixed[role="dialog"] .row.g-0 { flex-direction: column; }
+  .position-fixed[role="dialog"] .col-md-7,
+  .position-fixed[role="dialog"] .col-md-5 { flex: 0 0 auto; max-width: 100%; width: 100%; }
+  .position-fixed[role="dialog"] .col-md-7 { max-height: 40vh; }
+  .position-fixed[role="dialog"] .col-md-5 { max-height: calc(60vh); overflow-y: auto; }
+}
+
+/* Ensure modal images don't overflow and fit inside the allocated area */
+.position-fixed[role="dialog"] img {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
+}
+
+/* If an inner carousel sets height:100% inline, ensure it cannot exceed its container */
+.position-fixed[role="dialog"] .position-relative[style*="height"] {
+  max-height: 100% !important;
+}
+
+/* Always-visible close button inside modal */
+.modal-close-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1100;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.modal-close-overlay button {
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
+  color: #333;
+  cursor: pointer;
+}
+
+/* Stricter modal image height to avoid covering details */
+.position-fixed[role="dialog"] .col-md-7 img,
+.position-fixed[role="dialog"] .col-md-7 .card-image-viewport {
+  max-height: 45vh !important;
+}
+@media (max-width: 768px) {
+  .position-fixed[role="dialog"] .col-md-7 img,
+  .position-fixed[role="dialog"] .col-md-7 .card-image-viewport {
+    max-height: 36vh !important;
+  }
+}
