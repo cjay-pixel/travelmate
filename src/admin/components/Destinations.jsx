@@ -23,7 +23,8 @@ function Destinations() {
     images: [],
     hostName: '',
     phone: '',
-    email: ''
+    email: '',
+    bestDestination: false
   });
   const [imageFile1, setImageFile1] = useState(null);
   const [imageFile2, setImageFile2] = useState(null);
@@ -175,6 +176,7 @@ function Destinations() {
           hostName: formData.hostName || '',
           phone: formData.phone || '',
           email: formData.email || '',
+          bestDestination: !!formData.bestDestination,
           updatedAt: serverTimestamp()
         });
 
@@ -193,6 +195,7 @@ function Destinations() {
           hostName: formData.hostName || '',
           phone: formData.phone || '',
           email: formData.email || '',
+          bestDestination: !!formData.bestDestination,
           createdAt: serverTimestamp(),
           status: 'active'
         });
@@ -212,7 +215,8 @@ function Destinations() {
         images: [],
         hostName: '',
         phone: '',
-        email: ''
+        email: '',
+        bestDestination: false
       });
       setImageFile1(null);
       setImageFile2(null);
@@ -261,7 +265,8 @@ function Destinations() {
       ],
       hostName: destination.hostName || destination.host || '',
       phone: destination.phone || destination.contactPhone || '',
-      email: destination.email || destination.contactEmail || ''
+      email: destination.email || destination.contactEmail || '',
+      bestDestination: !!destination.bestDestination
     });
     setEditingId(destination.id);
     setShowAddForm(true);
@@ -303,6 +308,19 @@ function Destinations() {
         ? prev.category.filter(c => c !== category)
         : [...prev.category, category]
     }));
+  };
+
+  const handleToggleBest = async (destination) => {
+    try {
+      const newVal = !destination.bestDestination;
+      await updateDoc(doc(db, 'destinations', destination.id), { bestDestination: newVal, updatedAt: serverTimestamp() });
+      setMessage({ type: 'success', text: `Updated best status for ${destination.destinationName}` });
+      // update local state for immediate UI feedback
+      setDestinations(prev => prev.map(d => d.id === destination.id ? { ...d, bestDestination: newVal } : d));
+    } catch (err) {
+      console.error('Failed to toggle bestDestination', err);
+      setMessage({ type: 'danger', text: 'Failed to update best status' });
+    }
   };
 
   if (loading) {
@@ -692,6 +710,13 @@ function Destinations() {
                             title="Edit"
                           >
                             <i className="bi bi-pencil"></i>
+                          </button>
+                          <button
+                            className={`btn btn-sm ${destination.bestDestination ? 'btn-warning text-dark' : 'btn-outline-secondary'}`}
+                            onClick={() => handleToggleBest(destination)}
+                            title={destination.bestDestination ? 'Unmark Best Destination' : 'Mark as Best Destination'}
+                          >
+                            <i className={`bi ${destination.bestDestination ? 'bi-star-fill' : 'bi-star'}`}></i>
                           </button>
                           <button
                             className="btn btn-sm btn-outline-danger"

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Header from '../components/Header';
 import HeroSection from '../components/HeroSection';
 import FeaturesSection from '../components/FeaturesSection';
+import BestDestinations from '../components/BestDestinations';
 import Footer from '../components/Footer';
 import Auth from '../components/Auth';
 
@@ -23,6 +24,7 @@ function HomePage({ user, onNavigate }) {
       <main>
         <HeroSection />
         <FeaturesSection onNavigate={onNavigate} user={user} onShowAuth={handleShowAuth} />
+        <BestDestinations />
       </main>
 
       <Footer />

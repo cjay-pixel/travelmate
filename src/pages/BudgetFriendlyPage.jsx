@@ -4,6 +4,32 @@ import Footer from '../components/Footer';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 
+// Recursively collect likely image URLs from an object
+function collectImageUrls(obj) {
+  const urls = new Set();
+  const urlLike = (v) => typeof v === 'string' && (v.startsWith('http') || v.startsWith('data:') || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(v) || /images\.unsplash|firebasestorage/i.test(v));
+
+  function walk(value) {
+    if (!value) return;
+    if (typeof value === 'string') {
+      if (urlLike(value)) urls.add(value.trim());
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const it of value) walk(it);
+      return;
+    }
+    if (typeof value === 'object') {
+      for (const k of Object.keys(value)) {
+        walk(value[k]);
+      }
+    }
+  }
+
+  walk(obj);
+  return Array.from(urls);
+}
+
 function BudgetFriendlyPage({ user, onNavigate }) {
   const [filters, setFilters] = useState({
     budget: 15000,
@@ -29,41 +55,8 @@ function BudgetFriendlyPage({ user, onNavigate }) {
       snapshot.forEach((doc) => {
         const data = doc.data() || {};
 
-        // gather images from multiple possible fields (robust like SmartRecommendations)
-        let images = [];
-
-        // if images is array, flatten possible objects to urls
-        if (Array.isArray(data.images) && data.images.length) {
-          for (const it of data.images) {
-            if (!it) continue;
-            if (typeof it === 'string') images.push(it);
-            else if (it.url) images.push(it.url);
-            else if (it.src) images.push(it.src);
-          }
-        }
-
-        const legacyFields = [
-          'imageUrl', 'image', 'image1', 'image_1', 'image01', 'mainImage',
-          'imageUrl2', 'image2', 'image_2', 'imageUrl3', 'image3', 'image_3',
-          'photo1', 'photo2', 'photo3', 'photos', 'photo_urls'
-        ];
-
-        for (const key of legacyFields) {
-          const val = data[key];
-          if (!val) continue;
-          if (Array.isArray(val)) {
-            for (const v of val) if (v && !images.includes(v)) images.push(v);
-          } else if (typeof val === 'string') {
-            if (!images.includes(val)) images.push(val);
-          } else if (typeof val === 'object') {
-            // object might contain url/src
-            const url = val.url || val.src || val.path;
-            if (url && !images.includes(url)) images.push(url);
-          }
-        }
-
-        // final cleanup
-        images = images.map(i => (typeof i === 'string' ? i.trim() : '')).filter(Boolean);
+        // collect images robustly from any nested fields
+        let images = collectImageUrls(data);
 
         list.push({
           id: doc.id,
