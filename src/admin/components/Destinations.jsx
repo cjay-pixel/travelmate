@@ -30,6 +30,12 @@ function Destinations() {
   const [imageFile2, setImageFile2] = useState(null);
   const [imageFile3, setImageFile3] = useState(null);
   const [uploading, setUploading] = useState(false);
+  // Filter / Sort states
+  const [sortBy, setSortBy] = useState('destination'); // destination, city, region, rating, budget, categories
+  const [sortDir, setSortDir] = useState('asc'); // asc | desc
+  const [filterRegion, setFilterRegion] = useState('All');
+  const [filterCategory, setFilterCategory] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
   const formRef = useRef(null);
 
   useEffect(() => {
@@ -323,6 +329,88 @@ function Destinations() {
     }
   };
 
+  // Helper: extract numeric budget from common formats (returns Number or Infinity)
+  const parseBudgetValue = (budget) => {
+    if (!budget) return Infinity;
+    if (typeof budget === 'number') return budget;
+    try {
+      const s = String(budget).replace(/[,\s]/g, '');
+      const m = s.match(/(\d{2,})/);
+      if (m) return parseInt(m[1], 10);
+    } catch (e) {
+      // ignore
+    }
+    return Infinity;
+  };
+
+  // Compute visible destinations after applying filters and sorting
+  const getVisibleDestinations = () => {
+    let list = Array.isArray(destinations) ? destinations.slice() : [];
+
+    // Filter by region
+    if (filterRegion && filterRegion !== 'All') {
+      list = list.filter(d => (d.regionName || d.region || '').toString().toLowerCase().includes(filterRegion.toLowerCase()));
+    }
+
+    // Filter by category (single-select)
+    if (filterCategory && filterCategory !== 'All') {
+      list = list.filter(d => (d.category || d.tags || []).some(c => String(c).toLowerCase() === filterCategory.toLowerCase()));
+    }
+
+    // Search by destination name or city
+    if (searchTerm && searchTerm.trim()) {
+      const q = searchTerm.trim().toLowerCase();
+      list = list.filter(d => ((d.destinationName || d.name || '') + ' ' + (d.cityName || d.city || '')).toLowerCase().includes(q));
+    }
+
+    // Sorting
+    const dir = sortDir === 'asc' ? 1 : -1;
+    list.sort((a, b) => {
+      try {
+        if (sortBy === 'destination') {
+          const A = (a.destinationName || a.name || '').toString().toLowerCase();
+          const B = (b.destinationName || b.name || '').toString().toLowerCase();
+          return A.localeCompare(B) * dir;
+        }
+        if (sortBy === 'city') {
+          const A = (a.cityName || a.city || '').toString().toLowerCase();
+          const B = (b.cityName || b.city || '').toString().toLowerCase();
+          return A.localeCompare(B) * dir;
+        }
+        if (sortBy === 'region') {
+          const A = (a.regionName || a.region || '').toString().toLowerCase();
+          const B = (b.regionName || b.region || '').toString().toLowerCase();
+          return A.localeCompare(B) * dir;
+        }
+        if (sortBy === 'rating') {
+          const A = Number(a.rating || 0);
+          const B = Number(b.rating || 0);
+          return (A - B) * dir;
+        }
+        if (sortBy === 'budget') {
+          const A = parseBudgetValue(a.budget || a.estimatedCost || a.price || '');
+          const B = parseBudgetValue(b.budget || b.estimatedCost || b.price || '');
+          return (A - B) * dir;
+        }
+        if (sortBy === 'categories') {
+          const A = ((a.category && a.category[0]) || (a.tags && a.tags[0]) || '').toString().toLowerCase();
+          const B = ((b.category && b.category[0]) || (b.tags && b.tags[0]) || '').toString().toLowerCase();
+          return A.localeCompare(B) * dir;
+        }
+      } catch (e) {
+        return 0;
+      }
+      return 0;
+    });
+
+    return list;
+  };
+
+  // Precompute options for region and category selects to simplify JSX
+  const regionOptions = [...new Set((destinations || []).map(d => (d.regionName || d.region || '').toString()).filter(Boolean))];
+  if (!regionOptions.some(r => /mindanao/i.test(r))) regionOptions.push('Mindanao');
+  const categoryOptions = [...new Set(((destinations || []).flatMap ? (destinations.flatMap(d => (d.category || d.tags || []))) : destinations.reduce((acc, d) => acc.concat(d.category || d.tags || []), [])).map(c => c && c.toString()).filter(Boolean))];
+
   if (loading) {
     return (
       <div className="card border-0 shadow-sm rounded-4">
@@ -611,8 +699,50 @@ function Destinations() {
         {/* Destinations List */}
         <div>
           <h6 className="text-muted mb-3">
-            All Destinations ({destinations.length})
+            Destinations ({getVisibleDestinations().length} of {destinations.length})
           </h6>
+
+          {/* Filter / Sort Controls */}
+          <div className="d-flex flex-column flex-md-row gap-2 align-items-start align-items-md-center mb-3">
+            <div className="d-flex gap-2 w-100">
+              <div className="input-group">
+                <span className="input-group-text">Search</span>
+                <input type="text" className="form-control" placeholder="Search by name or city" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              </div>
+
+              <div className="input-group" style={{ minWidth: 200 }}>
+                <label className="input-group-text">Sort</label>
+                <select className="form-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                    <option value="destination">Destination (A-Z)</option>
+                    <option value="city">City (A-Z)</option>
+                    <option value="rating">Rating</option>
+                    <option value="budget">Budget</option>
+                </select>
+                <select className="form-select" value={sortDir} onChange={(e) => setSortDir(e.target.value)} style={{ maxWidth: 120 }}>
+                  <option value="asc">Asc</option>
+                  <option value="desc">Desc</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="d-flex gap-2 ms-md-auto">
+              <select className="form-select" value={filterRegion} onChange={(e) => setFilterRegion(e.target.value)} style={{ minWidth: 160 }}>
+                <option value="All">All Regions</option>
+                {regionOptions.map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+
+              <select className="form-select" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} style={{ minWidth: 160 }}>
+                <option value="All">All Categories</option>
+                {categoryOptions.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+
+              <button className="btn btn-outline-secondary" onClick={() => { setFilterCategory('All'); setFilterRegion('All'); setSearchTerm(''); setSortBy('destination'); setSortDir('asc'); }}>Reset</button>
+            </div>
+          </div>
 
           {destinations.length === 0 ? (
             <div className="text-center py-5">
@@ -644,7 +774,7 @@ function Destinations() {
                   </tr>
                 </thead>
                 <tbody>
-                  {destinations.map((destination) => (
+                  {getVisibleDestinations().map((destination) => (
                     <tr key={destination.id}>
                       <td>
                         <div style={{ position: 'relative', display: 'inline-block' }}>
