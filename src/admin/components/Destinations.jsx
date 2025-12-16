@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db, storage } from '../../../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -20,10 +20,13 @@ function Destinations() {
     category: [],
     budget: '',
     rating: 5,
-    imageUrl: ''
+    images: []
   });
-  const [imageFile, setImageFile] = useState(null);
+  const [imageFile1, setImageFile1] = useState(null);
+  const [imageFile2, setImageFile2] = useState(null);
+  const [imageFile3, setImageFile3] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const formRef = useRef(null);
 
   useEffect(() => {
     loadDestinations();
@@ -59,9 +62,45 @@ function Destinations() {
       
       const destinationsList = [];
       snapshot.forEach((doc) => {
+        const data = doc.data() || {};
+
+        // Normalize images: prefer an `images` array, otherwise gather legacy fields
+        let images = [];
+        // Start with any existing images array
+        if (Array.isArray(data.images) && data.images.length > 0) {
+          images = data.images.slice();
+        }
+
+        // Collect common legacy field names in likely order and merge them
+        const legacyFields = [
+          'imageUrl', 'image', 'image1', 'image_1', 'image01', 'mainImage',
+          'imageUrl2', 'image2', 'image_2', 'imageUrl3', 'image3', 'image_3',
+          'photo1', 'photo2', 'photo3'
+        ];
+
+        for (const key of legacyFields) {
+          const val = data[key];
+          if (val) {
+            // Only add if not already present
+            if (!images.includes(val)) images.push(val);
+          }
+        }
+
+        // Remove falsy values and keep order
+        images = (images || []).filter(Boolean);
+
+        // Debug: log document fields and resulting images array to help troubleshoot
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[Destinations] doc:', doc.id, 'fields:', Object.keys(data), '-> images:', images);
+        } catch (e) {
+          // ignore logging errors in environments that restrict console
+        }
+
         destinationsList.push({
           id: doc.id,
-          ...doc.data()
+          ...data,
+          images
         });
       });
       
@@ -88,6 +127,37 @@ function Destinations() {
     setMessage({ type: '', text: '' });
 
     try {
+      // prepare images: upload files if provided, otherwise use URLs from formData.images
+      const finalImages = [formData.images?.[0] || '', formData.images?.[1] || '', formData.images?.[2] || ''];
+      if (imageFile1) {
+        try {
+          const url1 = await handleImageUpload(imageFile1);
+          finalImages[0] = url1;
+        } catch (err) {
+          console.error('Failed uploading image 1', err);
+        }
+      }
+      if (imageFile2) {
+        try {
+          const url2 = await handleImageUpload(imageFile2);
+          finalImages[1] = url2;
+        } catch (err) {
+          console.error('Failed uploading image 2', err);
+        }
+      }
+      if (imageFile3) {
+        try {
+          const url3 = await handleImageUpload(imageFile3);
+          finalImages[2] = url3;
+        } catch (err) {
+          console.error('Failed uploading image 3', err);
+        }
+      }
+
+      // Ensure at least one image
+      if (!finalImages[0]) {
+        throw new Error('Please provide at least one image (URL or upload) for the destination.');
+      }
       if (editingId) {
         // Update existing destination
         await updateDoc(doc(db, 'destinations', editingId), {
@@ -98,7 +168,7 @@ function Destinations() {
           category: formData.category,
           budget: formData.budget,
           rating: parseFloat(formData.rating),
-          imageUrl: formData.imageUrl,
+          images: finalImages.filter(Boolean),
           updatedAt: serverTimestamp()
         });
 
@@ -113,7 +183,7 @@ function Destinations() {
           category: formData.category,
           budget: formData.budget,
           rating: parseFloat(formData.rating),
-          imageUrl: formData.imageUrl,
+          images: finalImages.filter(Boolean),
           createdAt: serverTimestamp(),
           status: 'active'
         });
@@ -130,9 +200,11 @@ function Destinations() {
         category: [],
         budget: '',
         rating: 5,
-        imageUrl: ''
+        images: []
       });
-      setImageFile(null);
+      setImageFile1(null);
+      setImageFile2(null);
+      setImageFile3(null);
       setShowAddForm(false);
       setEditingId(null);
       
@@ -170,12 +242,29 @@ function Destinations() {
       category: destination.category || [],
       budget: destination.budget,
       rating: destination.rating,
-      imageUrl: destination.imageUrl
+      images: [
+        (destination.images && destination.images[0]) || '',
+        (destination.images && destination.images[1]) || '',
+        (destination.images && destination.images[2]) || ''
+      ]
     });
     setEditingId(destination.id);
     setShowAddForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Scroll the add/edit form into view whenever it is shown (for edit or add)
+  useEffect(() => {
+    if (showAddForm && formRef.current) {
+      // small delay to ensure the element is rendered
+      setTimeout(() => {
+        try {
+          formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (e) {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 50);
+    }
+  }, [showAddForm]);
 
   const handleCancelEdit = () => {
     setFormData({
@@ -186,7 +275,7 @@ function Destinations() {
       category: [],
       budget: '',
       rating: 5,
-      imageUrl: ''
+      images: []
     });
     setEditingId(null);
     setShowAddForm(false);
@@ -248,7 +337,7 @@ function Destinations() {
 
         {/* Add/Edit Destination Form */}
         {showAddForm && (
-          <div className="card mb-4" style={{ backgroundColor: '#f8f9fa' }}>
+          <div ref={formRef} className="card mb-4" style={{ backgroundColor: '#f8f9fa' }}>
             <div className="card-body p-4">
               <h6 className="fw-bold mb-3">
                 {editingId ? 'Edit Destination' : 'Add New Destination'}
@@ -334,14 +423,54 @@ function Destinations() {
 
                   <div className="col-12 mb-3">
                     <label className="form-label fw-semibold">Image URL *</label>
-                    <input
-                      type="url"
-                      className="form-control"
-                      placeholder="https://example.com/image.jpg"
-                      value={formData.imageUrl}
-                      onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                      required
-                    />
+                    <div className="mb-2">
+                      <input
+                        type="url"
+                        className="form-control mb-2"
+                        placeholder="Main image URL (required)"
+                        value={formData.images[0] || ''}
+                        onChange={(e) => setFormData({ ...formData, images: [e.target.value, formData.images[1], formData.images[2]] })}
+                        required
+                      />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="form-control"
+                        onChange={(e) => setImageFile1(e.target.files?.[0] || null)}
+                      />
+                    </div>
+
+                    <div className="mb-2">
+                      <input
+                        type="url"
+                        className="form-control mb-2"
+                        placeholder="Optional image URL 2"
+                        value={formData.images[1] || ''}
+                        onChange={(e) => setFormData({ ...formData, images: [formData.images[0], e.target.value, formData.images[2]] })}
+                      />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="form-control"
+                        onChange={(e) => setImageFile2(e.target.files?.[0] || null)}
+                      />
+                    </div>
+
+                    <div>
+                      <input
+                        type="url"
+                        className="form-control mb-2"
+                        placeholder="Optional image URL 3"
+                        value={formData.images[2] || ''}
+                        onChange={(e) => setFormData({ ...formData, images: [formData.images[0], formData.images[1], e.target.value] })}
+                      />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="form-control"
+                        onChange={(e) => setImageFile3(e.target.files?.[0] || null)}
+                      />
+                    </div>
                     <small className="text-muted">
                       💡 Tip: Right-click any image online → "Copy image address" → Paste here
                       <br />
@@ -452,16 +581,23 @@ function Destinations() {
                   {destinations.map((destination) => (
                     <tr key={destination.id}>
                       <td>
-                        <img
-                          src={destination.imageUrl || 'https://via.placeholder.com/100x60?text=No+Image'}
-                          alt={destination.destinationName}
-                          style={{ 
-                            width: '100px', 
-                            height: '60px', 
-                            objectFit: 'cover', 
-                            borderRadius: '8px' 
-                          }}
-                        />
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                          <img
+                            src={(destination.images && destination.images[0]) || 'https://via.placeholder.com/100x60?text=No+Image'}
+                            alt={destination.destinationName}
+                            style={{ 
+                              width: '100px', 
+                              height: '60px', 
+                              objectFit: 'cover', 
+                              borderRadius: '8px' 
+                            }}
+                          />
+                          {destination.images && destination.images.length > 1 && (
+                            <span className="badge bg-secondary" style={{ position: 'absolute', bottom: 4, right: 4, fontSize: '0.65rem' }}>
+                              +{destination.images.length - 1}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <div className="fw-semibold">{destination.destinationName}</div>

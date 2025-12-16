@@ -11,6 +11,7 @@ function SmartRecommendationsPage({ user, onNavigate }) {
   const [preferenceOptions, setPreferenceOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [selectedDestination, setSelectedDestination] = useState(null);
 
   // Load preferences and destinations from Firebase on mount
   useEffect(() => {
@@ -47,11 +48,32 @@ function SmartRecommendationsPage({ user, onNavigate }) {
       
       const destinationsList = [];
       snapshot.forEach((doc) => {
-        const data = doc.data();
+        const data = doc.data() || {};
+
+        // Normalize images similar to admin Destinations
+        let images = [];
+        if (Array.isArray(data.images) && data.images.length > 0) {
+          images = data.images.slice();
+        }
+
+        const legacyFields = [
+          'imageUrl', 'image', 'image1', 'image_1', 'image01', 'mainImage',
+          'imageUrl2', 'image2', 'image_2', 'imageUrl3', 'image3', 'image_3',
+          'photo1', 'photo2', 'photo3'
+        ];
+
+        for (const key of legacyFields) {
+          const val = data[key];
+          if (val && !images.includes(val)) images.push(val);
+        }
+
+        images = (images || []).filter(Boolean);
+
         destinationsList.push({
           id: doc.id,
-          name: `${data.destinationName}, ${data.cityName}`,
-          image: data.imageUrl,
+          name: `${data.destinationName || ''}${data.cityName ? `, ${data.cityName}` : ''}`,
+          images: images,
+          image: images[0] || '',
           description: data.description,
           tags: data.category || [],
           rating: data.rating,
@@ -123,7 +145,7 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
         
         // Save AI-generated destinations to Firebase
         for (const dest of suggestions) {
-          try {
+            try {
             await addDoc(collection(db, 'destinations'), {
               destinationName: dest.destinationName,
               cityName: dest.cityName,
@@ -132,7 +154,7 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
               category: dest.category || selectedCategories,
               budget: dest.budget,
               rating: parseFloat(dest.rating),
-              imageUrl: dest.imageUrl || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600',
+              images: [dest.imageUrl || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600'],
               createdAt: serverTimestamp(),
               status: 'active',
               source: 'AI Generated'
@@ -195,6 +217,56 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
       .filter(rec => rec.matchScore > 0)
       .sort((a, b) => b.matchScore - a.matchScore);
   };
+
+  // Simple image carousel component (local to this page)
+  function ImageCarousel({ images = [], height = '200px' }) {
+    const [idx, setIdx] = useState(0);
+    const len = images?.length || 0;
+    if (len === 0) {
+      return (
+        <img
+          src={'https://via.placeholder.com/600x400?text=No+Image'}
+          className="card-img-top"
+          alt="No image"
+          style={{ height, objectFit: 'cover' }}
+        />
+      );
+    }
+
+    return (
+      <div className="position-relative" style={{ height }}>
+        <img
+          src={images[idx]}
+          className="card-img-top"
+          alt={`Image ${idx + 1}`}
+          style={{ height, objectFit: 'cover', width: '100%' }}
+          onClick={(e) => e.stopPropagation()}
+        />
+        {len > 1 && (
+          <>
+            <button
+              type="button"
+              className="btn btn-sm btn-light"
+              style={{ position: 'absolute', top: '50%', left: 8, transform: 'translateY(-50%)' }}
+              onClick={(e) => { e.stopPropagation(); setIdx((idx - 1 + len) % len); }}
+              aria-label="Previous image"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-light"
+              style={{ position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)' }}
+              onClick={(e) => { e.stopPropagation(); setIdx((idx + 1) % len); }}
+              aria-label="Next image"
+            >
+              ›
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -280,7 +352,14 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
             <div className="row g-4">
               {getFilteredRecommendations().map((destination) => (
                 <div key={destination.id} className="col-md-6 col-lg-4">
-                  <div className="card border-0 shadow-sm h-100">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedDestination(destination)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setSelectedDestination(destination); }}
+                    className="card border-0 shadow-sm h-100"
+                    style={{ cursor: 'pointer' }}
+                  >
                     {destination.isAISuggestion && (
                       <div className="position-absolute top-0 end-0 m-2">
                         <span className="badge bg-info">
@@ -289,12 +368,7 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
                         </span>
                       </div>
                     )}
-                    <img 
-                      src={destination.image} 
-                      className="card-img-top" 
-                      alt={destination.name}
-                      style={{ height: '200px', objectFit: 'cover' }}
-                    />
+                    <ImageCarousel images={destination.images} height={'200px'} />
                     <div className="card-body">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <h5 className="card-title fw-bold mb-0">{destination.name}</h5>
@@ -317,7 +391,7 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
                         </small>
                         {destination.matchScore && (
                           <span className="badge bg-success">
-                            {Math.round((destination.matchScore / selectedPreferences.length) * 100)}% Match
+                            {Math.round((destination.matchScore / Math.max(1, selectedPreferences.length)) * 100)}% Match
                           </span>
                         )}
                       </div>
@@ -326,6 +400,86 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
                 </div>
               ))}
             </div>
+
+            {/* Detail Modal / Drawer */}
+            {selectedDestination && (
+              <div
+                className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+                style={{ zIndex: 1050, background: 'rgba(0,0,0,0.6)' }}
+                onClick={(e) => { if (e.target === e.currentTarget) setSelectedDestination(null); }}
+                role="dialog"
+                aria-modal="true"
+              >
+                <div className="bg-white shadow-lg rounded" style={{ width: '90%', maxWidth: '1000px', maxHeight: '90%', overflowY: 'auto' }}>
+                  <div className="row g-0">
+                    <div className="col-md-7">
+                      <ImageCarousel images={selectedDestination.images} height={'400px'} />
+                    </div>
+                    <div className="col-md-5 p-4 d-flex flex-column">
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                          <h3 className="fw-bold mb-1">{selectedDestination.name}</h3>
+                          <div className="text-muted small">
+                            {selectedDestination.cityName}{selectedDestination.regionName ? `, ${selectedDestination.regionName}` : ''}
+                          </div>
+                        </div>
+                        <div className="text-warning text-end">
+                          <div><i className="bi bi-star-fill"></i> {selectedDestination.rating}</div>
+                        </div>
+                      </div>
+
+                      <p className="text-muted small mb-3">{selectedDestination.description}</p>
+
+                      <div className="mb-3">
+                        {selectedDestination.tags?.map((tag, idx) => (
+                          <span key={idx} className="badge bg-light text-dark border me-1">{tag}</span>
+                        ))}
+                      </div>
+
+                      <div className="mt-auto">
+                        <div className="mb-3">
+                          <strong>Estimated Budget:</strong>
+                          <div className="text-muted small">{selectedDestination.budget || 'Varies'}</div>
+                        </div>
+
+                        <div className="card p-3 border">
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                              <div className="small text-muted">Contact</div>
+                              <div className="fw-bold">{selectedDestination.hostName || selectedDestination.host || 'Local Host'}</div>
+                            </div>
+                            <div className="text-end small text-muted">Verified</div>
+                          </div>
+
+                          <div className="small mb-2">
+                            Phone: {selectedDestination.phone || selectedDestination.contactPhone || 'Not provided'}
+                          </div>
+                          <div className="small mb-3">
+                            Email: {selectedDestination.email || selectedDestination.contactEmail || 'Not provided'}
+                          </div>
+
+                          <div className="d-flex gap-2">
+                            { (selectedDestination.phone || selectedDestination.contactPhone) ? (
+                              <a className="btn btn-outline-primary btn-sm" href={`tel:${selectedDestination.phone || selectedDestination.contactPhone}`}>Call</a>
+                            ) : (
+                              <button className="btn btn-outline-secondary btn-sm" disabled>Call</button>
+                            )}
+
+                            { (selectedDestination.email || selectedDestination.contactEmail) ? (
+                              <a className="btn btn-primary btn-sm" href={`mailto:${selectedDestination.email || selectedDestination.contactEmail}`}>Email</a>
+                            ) : (
+                              <button className="btn btn-secondary btn-sm" disabled>Email</button>
+                            )}
+
+                            <button className="btn btn-outline-dark btn-sm ms-auto" onClick={() => setSelectedDestination(null)}>Close</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {aiLoading && (
               <div className="text-center py-4">
