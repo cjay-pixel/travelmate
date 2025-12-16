@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { auth, db } from '../../firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { checkAdminStatus } from './adminUtils';
@@ -11,8 +12,9 @@ import Messages from './components/Messages';
 import Analytics from './components/Analytics';
 
 function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoading }) {
+  const params = useParams();
   const [loading, setLoading] = useState(true);
-  const [activeSection, setActiveSection] = useState(section);
+  const [activeSection, setActiveSection] = useState(params?.section || section);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -103,15 +105,15 @@ function AdminDashboardPage({ onNavigate, user, section = 'dashboard', authLoadi
   }, [onNavigate, user, authLoading]);
 
   useEffect(() => {
-    // Update active section when prop changes
-    setActiveSection(section);
-    
+    // Update active section when route param or prop changes
+    setActiveSection(params?.section || section);
+
     // Reload dashboard data when returning to dashboard
-    if (section === 'dashboard' && !loading && user) {
+    if ((params?.section || section) === 'dashboard' && !loading && user) {
       console.log('Section changed to dashboard, reloading data...');
       loadDashboardData();
     }
-  }, [section, loading, user]);
+  }, [section, loading, user, params?.section]);
 
   const loadDashboardData = async () => {
     try {

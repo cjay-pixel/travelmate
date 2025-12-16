@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import SmartRecommendationsPage from './pages/SmartRecommendationsPage';
 import BudgetFriendlyPage from './pages/BudgetFriendlyPage';
@@ -13,71 +14,51 @@ import './App.css';
 function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState('home');
-  const [adminSection, setAdminSection] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
-    // Check if URL is /admin on initial load
+    // If URL starts with /admin set session type to admin
     const path = window.location.pathname;
     if (path === '/admin' || path.startsWith('/admin')) {
-      // Set session type to admin immediately
       sessionStorage.setItem('sessionType', 'admin');
-      // Parse admin section from URL
-      const section = path.split('/admin/')[1] || 'dashboard';
-      setCurrentPage('admin-dashboard');
-      setAdminSection(section);
     }
-    
-    // Set a timeout to stop loading after 3 seconds even if auth hasn't loaded
+
     const loadingTimeout = setTimeout(() => {
-      console.log('Auth loading timeout - proceeding anyway');
       setAuthLoading(false);
     }, 3000);
-    
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       clearTimeout(loadingTimeout);
-      
       const sessionType = sessionStorage.getItem('sessionType');
-      const path = window.location.pathname;
-      const isAdminPage = path === '/admin' || path.startsWith('/admin');
-      
-      // If user is logged in
+      const isAdminPage = location.pathname === '/admin' || location.pathname.startsWith('/admin');
+
       if (currentUser) {
-        // If no session type set, determine from current page
         if (!sessionType) {
-          if (isAdminPage) {
-            sessionStorage.setItem('sessionType', 'admin');
-          } else {
-            sessionStorage.setItem('sessionType', 'user');
-          }
+          sessionStorage.setItem('sessionType', isAdminPage ? 'admin' : 'user');
         }
-        
-        // If on admin page but session is user, sign out
+
         if (isAdminPage && sessionType === 'user') {
           auth.signOut();
           setUser(null);
           setAuthLoading(false);
           return;
         }
-        
-        // If on user page but session is admin, sign out
+
         if (!isAdminPage && sessionType === 'admin') {
           auth.signOut();
           setUser(null);
           setAuthLoading(false);
           return;
         }
-        
+
         setUser(currentUser);
       } else {
         setUser(null);
-        // Only clear session type if not on admin page
-        if (!isAdminPage) {
-          sessionStorage.removeItem('sessionType');
-        }
+        if (!isAdminPage) sessionStorage.removeItem('sessionType');
       }
-      
+
       setAuthLoading(false);
     });
 
@@ -85,80 +66,71 @@ function App() {
       clearTimeout(loadingTimeout);
       unsubscribe();
     };
-  }, []);
+    // eslint-disable-next-line
+  }, [location.pathname]);
 
   const handleNavigate = (page, data) => {
-    // Clear session type when signing out
     if (page === 'admin-login') {
       sessionStorage.removeItem('sessionType');
       if (user) {
         auth.signOut();
         setUser(null);
       }
+      navigate('/admin');
+      return;
     }
-    
-    if (page === 'home' && (currentPage === 'admin-dashboard' || currentPage === 'admin-login')) {
+
+    if (page === 'home') {
       sessionStorage.removeItem('sessionType');
       if (user) {
         auth.signOut();
         setUser(null);
       }
+      navigate('/');
+      return;
     }
-    
-    setCurrentPage(page);
+
     if (page === 'search' && data) {
       setSearchQuery(data);
+      navigate('/search');
+      return;
     }
-    
-    // Update URL for admin pages
-    if (page === 'admin-login') {
-      window.history.pushState({}, '', '/admin');
-      setAdminSection('dashboard');
-    } else if (page === 'admin-dashboard') {
+
+    if (page === 'smart-recommendations') return navigate('/smart-recommendations');
+    if (page === 'budget-friendly') return navigate('/budget-friendly');
+    if (page === 'easy-planning') return navigate('/easy-planning');
+    if (page === 'admin-dashboard') {
       const section = data || 'dashboard';
-      setAdminSection(section);
-      window.history.pushState({}, '', `/admin/${section}`);
-    } else if (page === 'home') {
-      window.history.pushState({}, '', '/');
+      sessionStorage.setItem('sessionType', 'admin');
+      navigate(`/admin/${section}`);
+      return;
     }
-    
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const renderPage = () => {
-    // Show loading while auth is initializing (with 3 second max timeout)
-    if (authLoading) {
-      return (
-        <div className="d-flex justify-content-center align-items-center min-vh-100">
-          <div className="spinner-border text-danger" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
+  if (authLoading) {
+    return (
+      <div className="d-flex justify-content-center align-items-center min-vh-100">
+        <div className="spinner-border text-danger" role="status">
+          <span className="visually-hidden">Loading...</span>
         </div>
-      );
-    }
-    
-    switch (currentPage) {
-      case 'smart-recommendations':
-        return <SmartRecommendationsPage user={user} onNavigate={handleNavigate} />;
-      case 'budget-friendly':
-        return <BudgetFriendlyPage user={user} onNavigate={handleNavigate} />;
-      case 'easy-planning':
-        return <EasyPlanningPage user={user} onNavigate={handleNavigate} />;
-      case 'search':
-        return <SearchResultsPage user={user} onNavigate={handleNavigate} searchQuery={searchQuery} />;
-      case 'admin-login':
-        return <AdminLoginPage onNavigate={handleNavigate} />;
-      case 'admin-dashboard':
-        return <AdminDashboardPage user={user} onNavigate={handleNavigate} section={adminSection} authLoading={authLoading} />;
-      case 'home':
-      default:
-        return <HomePage user={user} onNavigate={handleNavigate} />;
-    }
-  };
+      </div>
+    );
+  }
 
   return (
     <div className="app">
-      {renderPage()}
+      <Routes>
+        <Route path="/" element={<HomePage user={user} onNavigate={handleNavigate} />} />
+        <Route path="/smart-recommendations" element={<SmartRecommendationsPage user={user} onNavigate={handleNavigate} />} />
+        <Route path="/budget-friendly" element={<BudgetFriendlyPage user={user} onNavigate={handleNavigate} />} />
+        <Route path="/easy-planning" element={<EasyPlanningPage user={user} onNavigate={handleNavigate} />} />
+        <Route path="/search" element={<SearchResultsPage user={user} onNavigate={handleNavigate} searchQuery={searchQuery} />} />
+        <Route path="/admin" element={<AdminLoginPage onNavigate={handleNavigate} />} />
+        <Route path="/admin/:section" element={<AdminDashboardPage user={user} onNavigate={handleNavigate} authLoading={authLoading} />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </div>
   );
 }
