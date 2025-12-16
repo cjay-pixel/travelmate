@@ -248,7 +248,6 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
           className="card-img-top"
           alt={`Image ${idx + 1}`}
           style={{ height: '100%', width: '100%', objectFit: fit, transition: 'opacity .25s ease-in-out' }}
-          onClick={(e) => e.stopPropagation()}
         />
         {len > 1 && (
           <>

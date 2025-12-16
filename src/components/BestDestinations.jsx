@@ -16,7 +16,7 @@ function ImageCarousel({ images = [], height = '180px', fit = 'cover' }) {
 
   return (
     <div className="position-relative d-flex align-items-center justify-content-center" style={{ height, background: fit === 'contain' ? '#000' : 'transparent' }}>
-      <img src={images[idx]} className="card-img-top" alt={`Image ${idx + 1}`} style={{ height: '100%', width: '100%', objectFit: fit }} onClick={(e) => e.stopPropagation()} />
+      <img src={images[idx]} className="card-img-top" alt={`Image ${idx + 1}`} style={{ height: '100%', width: '100%', objectFit: fit }} />
       {len > 1 && (
         <>
           <button type="button" className="btn btn-sm btn-light" style={{ position: 'absolute', top: '50%', left: 8, transform: 'translateY(-50%)' }} onClick={(e) => { e.stopPropagation(); setIdx((idx - 1 + len) % len); }} aria-label="Previous image">‹</button>
