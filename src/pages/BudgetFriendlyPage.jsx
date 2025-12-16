@@ -29,28 +29,60 @@ function BudgetFriendlyPage({ user, onNavigate }) {
       snapshot.forEach((doc) => {
         const data = doc.data() || {};
 
-        // gather images from multiple possible fields
-        let images = Array.isArray(data.images) ? data.images.slice() : [];
-        const legacyFields = ['imageUrl', 'image', 'image1', 'mainImage', 'photo1'];
-        for (const key of legacyFields) {
-          if (data[key] && !images.includes(data[key])) images.push(data[key]);
+        // gather images from multiple possible fields (robust like SmartRecommendations)
+        let images = [];
+
+        // if images is array, flatten possible objects to urls
+        if (Array.isArray(data.images) && data.images.length) {
+          for (const it of data.images) {
+            if (!it) continue;
+            if (typeof it === 'string') images.push(it);
+            else if (it.url) images.push(it.url);
+            else if (it.src) images.push(it.src);
+          }
         }
 
-        images = images.filter(Boolean);
+        const legacyFields = [
+          'imageUrl', 'image', 'image1', 'image_1', 'image01', 'mainImage',
+          'imageUrl2', 'image2', 'image_2', 'imageUrl3', 'image3', 'image_3',
+          'photo1', 'photo2', 'photo3', 'photos', 'photo_urls'
+        ];
+
+        for (const key of legacyFields) {
+          const val = data[key];
+          if (!val) continue;
+          if (Array.isArray(val)) {
+            for (const v of val) if (v && !images.includes(v)) images.push(v);
+          } else if (typeof val === 'string') {
+            if (!images.includes(val)) images.push(val);
+          } else if (typeof val === 'object') {
+            // object might contain url/src
+            const url = val.url || val.src || val.path;
+            if (url && !images.includes(url)) images.push(url);
+          }
+        }
+
+        // final cleanup
+        images = images.map(i => (typeof i === 'string' ? i.trim() : '')).filter(Boolean);
 
         list.push({
           id: doc.id,
-          name: `${data.destinationName || data.name || ''}${data.cityName ? `, ${data.cityName}` : ''}`,
+          name: `${data.destinationName || data.name || ''}`,
+          cityName: data.cityName || '',
+          regionName: data.regionName || data.province || '',
           images: images,
           image: images[0] || data.image || '',
           description: data.description || data.summary || '',
           estimatedCost: data.estimatedCost || data.estimated_cost || data.price || (typeof data.budget === 'number' ? data.budget : undefined),
           duration: data.duration || data.length || '',
-          highlights: data.highlights || data.tags || [],
+          highlights: data.highlights || [],
+          tags: data.category || data.tags || [],
           budgetBreakdown: data.budgetBreakdown || data.breakdown || {},
           phone: data.phone || data.contactPhone || '',
           email: data.email || data.contactEmail || '',
-          hostName: data.hostName || data.host || ''
+          hostName: data.hostName || data.host || '',
+          rating: typeof data.rating === 'number' ? data.rating : (data.rating ? parseFloat(data.rating) : undefined),
+          isAISuggestion: data.source === 'AI Generated'
         });
       });
 
@@ -103,9 +135,15 @@ function BudgetFriendlyPage({ user, onNavigate }) {
     };
 
     return destinations
-      .filter(dest => parseCost(dest) <= filters.budget)
-      .sort((a, b) => parseCost(a) - parseCost(b));
+      .map(dest => ({ ...dest, __cost: parseCost(dest) }))
+      .filter(dest => dest.__cost <= filters.budget)
+      .sort((a, b) => (a.__cost || Infinity) - (b.__cost || Infinity));
   };
+
+  const togglePreference = (prefId) => {
+    // preferences removed for Budget Friendly page
+  };
+
 
   const tripDays = calculateDays();
 
@@ -303,31 +341,31 @@ function BudgetFriendlyPage({ user, onNavigate }) {
                     style={{ cursor: 'pointer' }}
                   >
                     <ImageCarousel images={destination.images || (destination.image ? [destination.image] : [])} height={'200px'} />
-                    <div className="card-body">
-                      <div className="d-flex justify-content-between align-items-start mb-2">
-                        <h5 className="card-title fw-bold mb-0">{destination.name}</h5>
-                        <span className="badge bg-success">{(destination.estimatedCost && typeof destination.estimatedCost === 'number') ? (`₱${destination.estimatedCost.toLocaleString()}`) : 'Varies'}</span>
-                      </div>
-                      <p className="card-text text-muted small mb-3">{destination.description}</p>
-                      
-                      <div className="mb-3">
-                        <small className="text-muted d-block mb-2">
-                          <i className="bi bi-clock me-1"></i>
-                          {destination.duration}
-                        </small>
-                      </div>
+                      <div className="card-body">
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <h5 className="card-title fw-bold mb-0">{destination.name}{destination.cityName ? `, ${destination.cityName}` : ''}</h5>
+                          <div className="text-warning">
+                            <i className="bi bi-star-fill"></i> {destination.rating || '—'}
+                          </div>
+                        </div>
 
-                      <div>
-                        <h6 className="small fw-bold mb-2">Highlights:</h6>
-                        <div className="d-flex flex-wrap gap-1">
-                          {(destination.highlights || []).map((highlight, idx) => (
-                            <span key={idx} className="badge bg-light text-dark border small">
-                              {highlight}
+                        <p className="card-text text-muted small mb-3">{destination.description}</p>
+
+                        <div className="d-flex flex-wrap gap-1 mb-3">
+                          {(destination.tags || []).slice(0, 3).map((tag, idx) => (
+                            <span key={idx} className="badge bg-light text-dark border">
+                              {tag}
                             </span>
                           ))}
                         </div>
+
+                                            <div className="d-flex justify-content-between align-items-center">
+                                              <small className="text-muted">
+                                                <i className="bi bi-wallet2 me-1"></i>
+                                                {(destination.estimatedCost && typeof destination.estimatedCost === 'number') ? `₱${destination.estimatedCost.toLocaleString()}` : 'Varies'}
+                                              </small>
+                                            </div>
                       </div>
-                    </div>
                   </div>
                 </div>
               ))}
