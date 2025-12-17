@@ -10,6 +10,7 @@ import BudgetFriendlyPage from './pages/BudgetFriendlyPage';
 import EasyPlanningPage from './pages/EasyPlanningPage';
 import TripsPage from './pages/TripsPage';
 import SearchResultsPage from './pages/SearchResultsPage';
+import ProfilePage from './pages/ProfilePage';
 import AdminLoginPage from './admin/AdminLoginPage';
 import AdminDashboardPage from './admin/AdminDashboardPage';
 import './App.css';
@@ -173,6 +174,8 @@ function App() {
       return;
     }
 
+    if (page === 'profile') return navigate('/profile');
+
     if (page === 'smart-recommendations') return navigate('/smart-recommendations');
     if (page === 'budget-friendly') return navigate('/budget-friendly');
     if (page === 'easy-planning') {
@@ -210,6 +213,7 @@ function App() {
         <Route path="/easy-planning" element={<EasyPlanningPage user={user} onNavigate={handleNavigate} />} />
         <Route path="/trips" element={<TripsPage user={user} onNavigate={handleNavigate} />} />
         <Route path="/search" element={<SearchResultsPage user={user} onNavigate={handleNavigate} searchQuery={searchQuery} />} />
+        <Route path="/profile" element={<ProfilePage user={user} onNavigate={handleNavigate} />} />
         <Route path="/admin" element={<AdminLoginPage onNavigate={handleNavigate} />} />
         <Route path="/admin/:section" element={<AdminDashboardPage user={user} onNavigate={handleNavigate} authLoading={authLoading} />} />
         <Route path="*" element={<Navigate to="/" replace />} />

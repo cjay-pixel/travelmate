@@ -210,7 +210,7 @@ function Header({ user, onShowAuth, onNavigate }) {
                       <div className="fw-bold">{user.displayName || user.email?.split('@')[0]}</div>
                       <div className="small text-muted">{user.email}</div>
                     </div>
-                    <a className="dropdown-item py-2" href="#">Profile</a>
+                    <a className="dropdown-item py-2" href="#" onClick={(e) => { e.preventDefault(); setShowMenu(false); if (onNavigate) onNavigate('profile'); }}>Profile</a>
                     <a className="dropdown-item py-2" href="#" onClick={(e) => { e.preventDefault(); if (onNavigate) onNavigate('trips'); }}>Trips</a>
                     {/* Wishlists and Help Center removed per request */}
                     <button className="dropdown-item py-2" onClick={handleLogout}>Log out</button>
