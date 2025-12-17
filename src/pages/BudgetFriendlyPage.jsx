@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, /* getDocs, */ onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 // Recursively collect likely image URLs from an object
@@ -42,49 +42,65 @@ function BudgetFriendlyPage({ user, onNavigate }) {
   const [selectedDestination, setSelectedDestination] = useState(null);
 
   useEffect(() => {
-    loadDestinations();
+    const unsubscribe = loadDestinations();
+    return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
   }, []);
 
-  const loadDestinations = async () => {
-    try {
-      setLoading(true);
-      const destinationsRef = collection(db, 'destinations');
-      const snapshot = await getDocs(destinationsRef);
+  const loadDestinations = () => {
+    setLoading(true);
+    const destinationsRef = collection(db, 'destinations');
+    const unsubscribe = onSnapshot(destinationsRef, (snapshot) => {
+      try {
+        const list = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data() || {};
 
-      const list = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data() || {};
+          // collect images robustly from any nested fields
+          let images = collectImageUrls(data);
 
-        // collect images robustly from any nested fields
-        let images = collectImageUrls(data);
+          // compute estimatedCost similar to other pages
+          let estimatedCost = data.estimatedCost || data.estimated_cost || data.price;
+          if (estimatedCost === undefined || estimatedCost === null) {
+            if (typeof data.budget === 'number') estimatedCost = data.budget;
+            else if (typeof data.budget === 'string') {
+              const nums = data.budget.replace(/[,₱\s]/g, '').match(/\d+/g);
+              if (nums && nums.length) estimatedCost = parseInt(nums[0], 10);
+            }
+          }
 
-        list.push({
-          id: doc.id,
-          name: `${data.destinationName || data.name || ''}`,
-          cityName: data.cityName || '',
-          regionName: data.regionName || data.province || '',
-          images: images,
-          image: images[0] || data.image || '',
-          description: data.description || data.summary || '',
-          estimatedCost: data.estimatedCost || data.estimated_cost || data.price || (typeof data.budget === 'number' ? data.budget : undefined),
-          duration: data.duration || data.length || '',
-          highlights: data.highlights || [],
-          tags: data.category || data.tags || [],
-          budgetBreakdown: data.budgetBreakdown || data.breakdown || {},
-          phone: data.phone || data.contactPhone || '',
-          email: data.email || data.contactEmail || '',
-          hostName: data.hostName || data.host || '',
-          rating: typeof data.rating === 'number' ? data.rating : (data.rating ? parseFloat(data.rating) : undefined),
-          isAISuggestion: data.source === 'AI Generated'
+          list.push({
+            id: doc.id,
+            name: `${data.destinationName || data.name || ''}`,
+            cityName: data.cityName || '',
+            regionName: data.regionName || data.province || '',
+            images: images,
+            image: images[0] || data.image || '',
+            description: data.description || data.summary || '',
+            estimatedCost: estimatedCost,
+            duration: data.duration || data.length || '',
+            highlights: data.highlights || [],
+            tags: data.category || data.tags || [],
+            budgetBreakdown: data.budgetBreakdown || data.breakdown || {},
+            phone: data.phone || data.contactPhone || '',
+            email: data.email || data.contactEmail || '',
+            hostName: data.hostName || data.host || '',
+            rating: typeof data.rating === 'number' ? data.rating : (data.rating ? parseFloat(data.rating) : undefined),
+            isAISuggestion: data.source === 'AI Generated'
+          });
         });
-      });
 
-      setDestinations(list);
-    } catch (error) {
-      console.error('Error loading destinations:', error);
-    } finally {
+        setDestinations(list);
+      } catch (err) {
+        console.error('Error processing destinations snapshot', err);
+      } finally {
+        setLoading(false);
+      }
+    }, (err) => {
+      console.error('Failed to listen to destinations', err);
       setLoading(false);
-    }
+    });
+
+    return unsubscribe;
   };
 
   const calculateDays = () => {

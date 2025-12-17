@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, /* getDocs, */ addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 function SmartRecommendationsPage({ user, onNavigate }) {
@@ -16,7 +16,8 @@ function SmartRecommendationsPage({ user, onNavigate }) {
   // Load preferences and destinations from Firebase on mount
   useEffect(() => {
     loadPreferences();
-    loadDestinations();
+    const unsub = loadDestinations();
+    return () => { if (typeof unsub === 'function') unsub(); };
   }, []);
 
   const loadPreferences = async () => {
@@ -40,62 +41,75 @@ function SmartRecommendationsPage({ user, onNavigate }) {
     }
   };
 
-  const loadDestinations = async () => {
-    try {
-      setLoading(true);
-      const destinationsRef = collection(db, 'destinations');
-      const snapshot = await getDocs(destinationsRef);
-      
-      const destinationsList = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data() || {};
+  const loadDestinations = () => {
+    setLoading(true);
+    const destinationsRef = collection(db, 'destinations');
+    const unsubscribe = onSnapshot(destinationsRef, (snapshot) => {
+      try {
+        const destinationsList = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data() || {};
 
-        // Normalize images similar to admin Destinations
-        let images = [];
-        if (Array.isArray(data.images) && data.images.length > 0) {
-          images = data.images.slice();
-        }
+          // Normalize images similar to admin Destinations
+          let images = [];
+          if (Array.isArray(data.images) && data.images.length > 0) {
+            images = data.images.slice();
+          }
 
-        const legacyFields = [
-          'imageUrl', 'image', 'image1', 'image_1', 'image01', 'mainImage',
-          'imageUrl2', 'image2', 'image_2', 'imageUrl3', 'image3', 'image_3',
-          'photo1', 'photo2', 'photo3'
-        ];
+          const legacyFields = [
+            'imageUrl', 'image', 'image1', 'image_1', 'image01', 'mainImage',
+            'imageUrl2', 'image2', 'image_2', 'imageUrl3', 'image3', 'image_3',
+            'photo1', 'photo2', 'photo3'
+          ];
 
-        for (const key of legacyFields) {
-          const val = data[key];
-          if (val && !images.includes(val)) images.push(val);
-        }
+          for (const key of legacyFields) {
+            const val = data[key];
+            if (val && !images.includes(val)) images.push(val);
+          }
 
-        images = (images || []).filter(Boolean);
+          images = (images || []).filter(Boolean);
 
-        destinationsList.push({
-          id: doc.id,
-          name: `${data.destinationName || ''}${data.cityName ? `, ${data.cityName}` : ''}`,
-          images: images,
-          image: images[0] || '',
-          description: data.description,
-          tags: data.category || [],
-          rating: data.rating,
-          budget: data.budget,
-          cityName: data.cityName,
-          regionName: data.regionName
-          ,
-          // contact fields (support multiple possible field names)
-          phone: data.phone || data.contactPhone || '',
-          contactPhone: data.contactPhone || data.phone || '',
-          email: data.email || data.contactEmail || '',
-          contactEmail: data.contactEmail || data.email || '',
-          hostName: data.hostName || data.host || ''
+          // Normalize budget/contact fields: try to compute numeric estimatedCost
+          let estimatedCost;
+          if (typeof data.estimatedCost === 'number') estimatedCost = data.estimatedCost;
+          else if (typeof data.budget === 'number') estimatedCost = data.budget;
+          else if (typeof data.budget === 'string') {
+            const nums = data.budget.replace(/[_,₱\s]/g, '').match(/\d+/g);
+            if (nums && nums.length) estimatedCost = parseInt(nums[0], 10);
+          }
+
+          destinationsList.push({
+            id: doc.id,
+            name: `${data.destinationName || ''}${data.cityName ? `, ${data.cityName}` : ''}`,
+            images: images,
+            image: images[0] || '',
+            description: data.description,
+            tags: data.category || [],
+            rating: data.rating,
+            budget: data.budget,
+            estimatedCost,
+            cityName: data.cityName,
+            regionName: data.regionName,
+            phone: data.phone || data.contactPhone || '',
+            contactPhone: data.contactPhone || data.phone || '',
+            email: data.email || data.contactEmail || '',
+            contactEmail: data.contactEmail || data.email || '',
+            hostName: data.hostName || data.host || ''
+          });
         });
-      });
-      
-      setDestinations(destinationsList);
-    } catch (error) {
-      console.error('Error loading destinations:', error);
-    } finally {
+
+        setDestinations(destinationsList);
+      } catch (err) {
+        console.error('Error processing destinations snapshot', err);
+      } finally {
+        setLoading(false);
+      }
+    }, (err) => {
+      console.error('Failed to listen to destinations', err);
       setLoading(false);
-    }
+    });
+
+    return unsubscribe;
   };
 
   const getAISuggestions = async (selectedCategories) => {

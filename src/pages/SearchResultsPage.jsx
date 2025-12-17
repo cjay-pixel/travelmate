@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, /* getDocs, */ onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 // Recursively collect likely image URLs from an object
@@ -35,36 +35,52 @@ function SearchResultsPage({ user, onNavigate, searchQuery }) {
   const [selectedDestination, setSelectedDestination] = useState(null);
 
   useEffect(() => {
-    // load admin destinations once
-    const load = async () => {
-      setLoading(true);
+    // listen to admin destinations in real-time
+    setLoading(true);
+    const ref = collection(db, 'destinations');
+    const unsubscribe = onSnapshot(ref, (snap) => {
       try {
-        const ref = collection(db, 'destinations');
-        const snap = await getDocs(ref);
         const list = [];
         snap.forEach(doc => {
           const data = doc.data() || {};
           const images = collectImageUrls(data);
+
+          // normalize price/budget
+          let pricePerDay = data.price || data.estimatedCost || data.estimated_cost;
+          if (pricePerDay === undefined || pricePerDay === null) {
+            if (typeof data.budget === 'number') pricePerDay = data.budget;
+            else if (typeof data.budget === 'string') {
+              const nums = data.budget.replace(/[,₱\s]/g, '').match(/\d+/g);
+              if (nums && nums.length) pricePerDay = parseInt(nums[0], 10);
+            }
+          }
+
           list.push({
             id: doc.id,
             name: data.destinationName || data.name || data.cityName || 'Unknown',
             location: data.cityName || data.regionName || data.province || '',
             images,
             image: images[0] || data.image || data.imageUrl || '',
-            pricePerDay: typeof data.budget === 'number' ? data.budget : (data.price || 0),
+            pricePerDay: Number(pricePerDay) || 0,
             description: data.description || data.summary || '',
             tags: data.category || data.tags || [],
-            raw: data
+            raw: data,
+            phone: data.phone || data.contactPhone || '',
+            email: data.email || data.contactEmail || ''
           });
         });
         setAllDestinations(list);
       } catch (err) {
-        console.error('Failed to load destinations for search:', err);
+        console.error('Failed to process destinations snapshot for search:', err);
       } finally {
         setLoading(false);
       }
-    };
-    load();
+    }, (err) => {
+      console.error('Failed to listen to destinations for search:', err);
+      setLoading(false);
+    });
+
+    return () => { try { unsubscribe(); } catch (e) {} };
   }, []);
 
   useEffect(() => {

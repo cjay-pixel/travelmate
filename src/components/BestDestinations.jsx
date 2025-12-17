@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, /* getDocs, */ onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 // Small ImageCarousel used inside cards
@@ -81,48 +81,61 @@ export default function BestDestinations({ title = 'Best Destinations' }) {
   const [selectedDestination, setSelectedDestination] = useState(null);
 
   useEffect(() => {
-    loadDestinations();
-  }, []);
+    setLoading(true);
+    const ref = collection(db, 'destinations');
+    const unsubscribe = onSnapshot(ref, (snap) => {
+      try {
+        const list = [];
+        snap.forEach(doc => {
+          const data = doc.data() || {};
+          const isBest = !!data.bestDestination;
+          if (!isBest) return; // only include admin-marked best destinations
 
-  const loadDestinations = async () => {
-    try {
-      setLoading(true);
-      const ref = collection(db, 'destinations');
-      const snap = await getDocs(ref);
-      const list = [];
-      snap.forEach(doc => {
-        const data = doc.data() || {};
-        const isBest = !!data.bestDestination;
-        if (!isBest) return; // only include admin-marked best destinations
-        // collect images robustly from any nested fields
-        let images = collectImageUrls(data);
+          // collect images robustly from any nested fields
+          let images = collectImageUrls(data);
 
-        list.push({
-          id: doc.id,
-          name: data.destinationName || data.name || '',
-          cityName: data.cityName || data.city || '',
-          regionName: data.regionName || data.region || data.province || '',
-          images,
-          image: images[0] || data.image || '',
-          description: data.description || data.summary || '',
-          tags: data.category || data.tags || [],
-          rating: typeof data.rating === 'number' ? data.rating : (data.rating ? parseFloat(data.rating) : undefined),
-          estimatedCost: data.estimatedCost || data.estimated_cost || data.price || (typeof data.budget === 'number' ? data.budget : undefined),
-          budgetBreakdown: data.budgetBreakdown || data.breakdown || {},
-          phone: data.phone || data.contactPhone || '',
-          email: data.email || data.contactEmail || '',
-          hostName: data.hostName || data.host || '',
-          isAISuggestion: data.source === 'AI Generated'
+          // normalize estimatedCost/budget
+          let estimatedCost = data.estimatedCost || data.estimated_cost || data.price;
+          if (estimatedCost === undefined || estimatedCost === null) {
+            if (typeof data.budget === 'number') estimatedCost = data.budget;
+            else if (typeof data.budget === 'string') {
+              const nums = data.budget.replace(/[,₱\s]/g, '').match(/\d+/g);
+              if (nums && nums.length) estimatedCost = parseInt(nums[0], 10);
+            }
+          }
+
+          list.push({
+            id: doc.id,
+            name: data.destinationName || data.name || '',
+            cityName: data.cityName || data.city || '',
+            regionName: data.regionName || data.region || data.province || '',
+            images,
+            image: images[0] || data.image || '',
+            description: data.description || data.summary || '',
+            tags: data.category || data.tags || [],
+            rating: typeof data.rating === 'number' ? data.rating : (data.rating ? parseFloat(data.rating) : undefined),
+            estimatedCost,
+            budgetBreakdown: data.budgetBreakdown || data.breakdown || {},
+            phone: data.phone || data.contactPhone || '',
+            email: data.email || data.contactEmail || '',
+            hostName: data.hostName || data.host || '',
+            isAISuggestion: data.source === 'AI Generated'
+          });
         });
-      });
 
-      setDestinations(list);
-    } catch (err) {
-      console.error('Error loading best destinations:', err);
-    } finally {
+        setDestinations(list);
+      } catch (err) {
+        console.error('Error processing best destinations snapshot', err);
+      } finally {
+        setLoading(false);
+      }
+    }, (err) => {
+      console.error('Failed to listen to best destinations', err);
       setLoading(false);
-    }
-  };
+    });
+
+    return () => { try { unsubscribe(); } catch (e) {} };
+  }, []);
 
   const groups = destinations.reduce((acc, dest) => {
     const r = regionFor(dest);
