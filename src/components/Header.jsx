@@ -212,9 +212,7 @@ function Header({ user, onShowAuth, onNavigate }) {
                     </div>
                     <a className="dropdown-item py-2" href="#">Profile</a>
                     <a className="dropdown-item py-2" href="#" onClick={(e) => { e.preventDefault(); if (onNavigate) onNavigate('trips'); }}>Trips</a>
-                    <a className="dropdown-item py-2" href="#">Wishlists</a>
-                    <hr className="dropdown-divider" />
-                    <a className="dropdown-item py-2" href="#">Help Center</a>
+                    {/* Wishlists and Help Center removed per request */}
                     <button className="dropdown-item py-2" onClick={handleLogout}>Log out</button>
                   </>
                 ) : (
@@ -225,8 +223,7 @@ function Header({ user, onShowAuth, onNavigate }) {
                     <button className="dropdown-item py-2" onClick={handleLoginClick}>
                       Sign up
                     </button>
-                    <hr className="dropdown-divider" />
-                    <a className="dropdown-item py-2" href="#">Help Center</a>
+                    {/* Help Center removed for logged-out users */}
                   </>
                 )}
               </div>
