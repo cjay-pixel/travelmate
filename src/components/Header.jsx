@@ -11,6 +11,8 @@ function Header({ user, onShowAuth, onNavigate }) {
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [searchHistory, setSearchHistory] = useState([]);
   const searchRef = useRef(null);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [mobileSearchQuery, setMobileSearchQuery] = useState('');
 
   // Popular searches
   const popularSearches = [
@@ -190,47 +192,89 @@ function Header({ user, onShowAuth, onNavigate }) {
             )}
           </div>
 
-          {/* User Menu */}
-          <div className="dropdown">
-            <button 
-              className="btn btn-outline-secondary rounded-pill d-flex align-items-center gap-2 px-3 py-2"
-              type="button"
-              onClick={toggleMenu}
+          {/* User Menu + Mobile Search */}
+          <div className="d-flex align-items-center">
+            <button
+              className="btn btn-link text-decoration-none text-reset me-2 d-lg-none"
+              onClick={() => setShowMobileSearch(true)}
+              title="Search"
             >
-              <i className="bi bi-list fs-5"></i>
-              <i className="bi bi-person-circle fs-5"></i>
+              <i className="bi bi-search" />
             </button>
 
-            {/* Dropdown Menu */}
-            {showMenu && (
-              <div className="dropdown-menu dropdown-menu-end show position-absolute mt-2 shadow-lg border-0 rounded-3" style={{ minWidth: '240px', right: 0 }}>
-                {user ? (
-                  <>
-                    <div className="px-3 py-2 border-bottom">
-                      <div className="fw-bold">{user.displayName || user.email?.split('@')[0]}</div>
-                      <div className="small text-muted">{user.email}</div>
-                    </div>
-                    <a className="dropdown-item py-2" href="#" onClick={(e) => { e.preventDefault(); setShowMenu(false); if (onNavigate) onNavigate('profile'); }}>Profile</a>
-                    <a className="dropdown-item py-2" href="#" onClick={(e) => { e.preventDefault(); if (onNavigate) onNavigate('trips'); }}>Trips</a>
-                    {/* Wishlists and Help Center removed per request */}
-                    <button className="dropdown-item py-2" onClick={handleLogout}>Log out</button>
-                  </>
-                ) : (
-                  <>
-                    <button className="dropdown-item py-2 fw-bold" onClick={handleLoginClick}>
-                      Log in
-                    </button>
-                    <button className="dropdown-item py-2" onClick={handleLoginClick}>
-                      Sign up
-                    </button>
-                    {/* Help Center removed for logged-out users */}
-                  </>
-                )}
-              </div>
-            )}
+            <div className="dropdown">
+              <button 
+                className="btn btn-outline-secondary rounded-pill d-flex align-items-center gap-2 px-3 py-2"
+                type="button"
+                onClick={toggleMenu}
+              >
+                <i className="bi bi-list fs-5"></i>
+                <i className="bi bi-person-circle fs-5"></i>
+              </button>
+
+              {/* Dropdown Menu */}
+              {showMenu && (
+                <div className="dropdown-menu dropdown-menu-end show position-absolute mt-2 shadow-lg border-0 rounded-3" style={{ minWidth: '240px', right: 0 }}>
+                  {user ? (
+                    <>
+                      <div className="px-3 py-2 border-bottom">
+                        <div className="fw-bold">{user.displayName || user.email?.split('@')[0]}</div>
+                        <div className="small text-muted">{user.email}</div>
+                      </div>
+                      <a className="dropdown-item py-2" href="#" onClick={(e) => { e.preventDefault(); setShowMenu(false); if (onNavigate) onNavigate('profile'); }}>Profile</a>
+                      <a className="dropdown-item py-2" href="#" onClick={(e) => { e.preventDefault(); if (onNavigate) onNavigate('trips'); }}>Trips</a>
+                      {/* Wishlists and Help Center removed per request */}
+                      <button className="dropdown-item py-2" onClick={handleLogout}>Log out</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="dropdown-item py-2 fw-bold" onClick={handleLoginClick}>
+                        Log in
+                      </button>
+                      <button className="dropdown-item py-2" onClick={handleLoginClick}>
+                        Sign up
+                      </button>
+                      {/* Help Center removed for logged-out users */}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </nav>
+
+      {/* Mobile Search Overlay */}
+      {showMobileSearch && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-start p-3"
+          style={{ zIndex: 1080, background: 'rgba(0,0,0,0.4)' }}
+          onClick={() => setShowMobileSearch(false)}
+        >
+          <div className="bg-white w-100 rounded shadow-sm p-3" onClick={(e) => e.stopPropagation()}>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!mobileSearchQuery.trim()) return;
+              handleSearch(mobileSearchQuery);
+              setMobileSearchQuery('');
+              setShowMobileSearch(false);
+            }}>
+              <div className="input-group">
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Start your search"
+                  value={mobileSearchQuery}
+                  onChange={(e) => setMobileSearchQuery(e.target.value)}
+                  autoFocus
+                />
+                <button className="btn btn-danger" type="submit"><i className="bi bi-search"></i></button>
+                <button type="button" className="btn btn-link text-muted" onClick={() => setShowMobileSearch(false)}><i className="bi bi-x-lg"></i></button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Auth Modal */}
       {showAuthModal && (
