@@ -7,6 +7,7 @@ import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-
 import HomePage from './pages/HomePage';
 import SmartRecommendationsPage from './pages/SmartRecommendationsPage';
 import BudgetFriendlyPage from './pages/BudgetFriendlyPage';
+import WishlistPage from './pages/WishlistPage';
 import EasyPlanningPage from './pages/EasyPlanningPage';
 import TripsPage from './pages/TripsPage';
 import SearchResultsPage from './pages/SearchResultsPage';
@@ -184,6 +185,7 @@ function App() {
       return navigate('/easy-planning');
     }
     if (page === 'trips') return navigate('/trips');
+    if (page === 'wishlist') return navigate('/wishlist');
     if (page === 'admin-dashboard') {
       const section = data || 'dashboard';
       sessionStorage.setItem('sessionType', 'admin');
@@ -212,6 +214,7 @@ function App() {
         <Route path="/budget-friendly" element={<BudgetFriendlyPage user={user} onNavigate={handleNavigate} />} />
         <Route path="/easy-planning" element={<EasyPlanningPage user={user} onNavigate={handleNavigate} />} />
         <Route path="/trips" element={<TripsPage user={user} onNavigate={handleNavigate} />} />
+        <Route path="/wishlist" element={<WishlistPage user={user} onNavigate={handleNavigate} />} />
         <Route path="/search" element={<SearchResultsPage user={user} onNavigate={handleNavigate} searchQuery={searchQuery} />} />
         <Route path="/profile" element={<ProfilePage user={user} onNavigate={handleNavigate} />} />
         <Route path="/admin" element={<AdminLoginPage onNavigate={handleNavigate} />} />

@@ -56,6 +56,19 @@ service cloud.firestore {
                                (request.auth.uid == resource.data.userId || isSuperAdmin());
     }
     
+    // Wishlists collection - users can manage their own wishlist entries
+    match /wishlists/{wishlistId} {
+      // Allow an authenticated user to read their own wishlist documents
+      allow get: if request.auth != null && (resource.data.userId == request.auth.uid || isSuperAdmin());
+      // Allow queries that filter by `userId` to succeed because each returned
+      // document will still be validated by the `get` condition above.
+      allow list: if request.auth != null;
+      // Allow create only when the creating userId matches the authenticated user
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      // Allow update/delete only for the owner or super admin
+      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isSuperAdmin());
+    }
+    
     // Default deny all other collections
     match /{document=**} {
       allow read, write: if false;

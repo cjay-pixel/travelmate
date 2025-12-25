@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { collection, /* getDocs, */ onSnapshot } from 'firebase/firestore';
+import { collection, /* getDocs, */ onSnapshot, query, where, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 // Recursively collect likely image URLs from an object
@@ -40,11 +40,39 @@ function BudgetFriendlyPage({ user, onNavigate }) {
   const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState(null);
+  const [wishlistMap, setWishlistMap] = useState({});
 
   useEffect(() => {
     const unsubscribe = loadDestinations();
     return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
   }, []);
+
+  useEffect(() => {
+    if (!user) { setWishlistMap({}); return; }
+    const q = query(collection(db, 'wishlists'), where('userId', '==', user.uid));
+    const unsub = onSnapshot(q, snap => {
+      const map = {};
+      snap.forEach(d => { const data = d.data(); if (data && data.placeId) map[data.placeId] = d.id; });
+      setWishlistMap(map);
+    }, err => console.error('wishlist listen failed', err));
+    return () => unsub();
+  }, [user]);
+
+  const toggleWishlist = async (destination, e) => {
+    if (e) e.stopPropagation();
+    if (!user) { alert('Please log in to add to wishlist'); return; }
+    const placeId = destination.id;
+    try {
+      if (wishlistMap[placeId]) {
+        await deleteDoc(doc(db, 'wishlists', wishlistMap[placeId]));
+      } else {
+        await addDoc(collection(db, 'wishlists'), { userId: user.uid, placeId, placeData: destination, createdAt: new Date().toISOString() });
+      }
+    } catch (err) {
+      console.error('Wishlist toggle failed', err);
+      alert('Failed to update wishlist');
+    }
+  };
 
   const loadDestinations = () => {
     setLoading(true);
@@ -338,7 +366,7 @@ function BudgetFriendlyPage({ user, onNavigate }) {
             </h4>
 
             <div className="row g-4">
-              {getFilteredDestinations().map((destination) => (
+                {getFilteredDestinations().map((destination) => (
                 <div key={destination.id} className="col-md-6 col-lg-4">
                   <div
                     role="button"
@@ -346,8 +374,15 @@ function BudgetFriendlyPage({ user, onNavigate }) {
                     onClick={() => setSelectedDestination(destination)}
                     onKeyDown={(e) => { if (e.key === 'Enter') setSelectedDestination(destination); }}
                     className="card border-0 shadow-sm h-100"
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', position: 'relative' }}
                   >
+                    <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 30 }} onClick={(e) => toggleWishlist(destination, e)}>
+                      {wishlistMap[destination.id] ? (
+                        <button className="wishlist-btn wishlist-btn-sm active" title="Remove from wishlist"><i className="bi bi-heart-fill" /></button>
+                      ) : (
+                        <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
+                      )}
+                    </div>
                     <ImageCarousel images={destination.images || (destination.image ? [destination.image] : [])} height={'200px'} />
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-start mb-2">

@@ -24,7 +24,7 @@ function HomePage({ user, onNavigate }) {
       <main>
         <HeroSection />
         <FeaturesSection onNavigate={onNavigate} user={user} onShowAuth={handleShowAuth} />
-        <BestDestinations />
+        <BestDestinations user={user} onNavigate={onNavigate} />
       </main>
 
       <Footer />

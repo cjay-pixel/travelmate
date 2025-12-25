@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { collection, /* getDocs, */ onSnapshot } from 'firebase/firestore';
+import DestinationDetailModal from './DestinationDetailModal';
+import { collection, /* getDocs, */ onSnapshot, query, where, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 // Small ImageCarousel used inside cards
@@ -75,10 +76,11 @@ function collectImageUrls(obj) {
   return Array.from(urls);
 }
 
-export default function BestDestinations({ title = 'Best Destinations' }) {
+export default function BestDestinations({ title = 'Best Destinations', user, onNavigate }) {
   const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState(null);
+  const [wishlistMap, setWishlistMap] = useState({}); // placeId -> wishlistDocId
 
   useEffect(() => {
     setLoading(true);
@@ -137,6 +139,41 @@ export default function BestDestinations({ title = 'Best Destinations' }) {
     return () => { try { unsubscribe(); } catch (e) {} };
   }, []);
 
+  useEffect(() => {
+    if (!user) { setWishlistMap({}); return; }
+    const q = query(collection(db, 'wishlists'), where('userId', '==', user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      const map = {};
+      snap.forEach(d => {
+        const data = d.data();
+        if (data && data.placeId) map[data.placeId] = d.id;
+      });
+      setWishlistMap(map);
+    }, (err) => { console.error('Wishlist listener failed', err); });
+    return () => unsub();
+  }, [user]);
+
+  const toggleWishlist = async (destination, e) => {
+    e.stopPropagation();
+    if (!user) { alert('Please log in to add to wishlist'); return; }
+    const placeId = destination.id;
+    try {
+      if (wishlistMap[placeId]) {
+        await deleteDoc(doc(db, 'wishlists', wishlistMap[placeId]));
+      } else {
+        await addDoc(collection(db, 'wishlists'), {
+          userId: user.uid,
+          placeId,
+          placeData: destination,
+          createdAt: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.error('Wishlist toggle failed', err);
+      alert('Failed to update wishlist');
+    }
+  };
+
   const groups = destinations.reduce((acc, dest) => {
     const r = regionFor(dest);
     if (!acc[r]) acc[r] = [];
@@ -167,7 +204,15 @@ export default function BestDestinations({ title = 'Best Destinations' }) {
         <div style={{ position: 'relative' }}>
           <div ref={containerRef} className="d-flex gap-3 overflow-x-auto pb-2" style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}>
             {items.map((destination) => (
-              <div key={destination.id} className="card border-0 shadow-sm" style={{ minWidth: 280, maxWidth: 320, scrollSnapAlign: 'start', cursor: 'pointer' }} onClick={() => setSelectedDestination(destination)}>
+              <div key={destination.id} className="card border-0 shadow-sm" style={{ minWidth: 280, maxWidth: 320, scrollSnapAlign: 'start', cursor: 'pointer', position: 'relative' }} onClick={() => setSelectedDestination(destination)}>
+                {/* Heart / wishlist */}
+                <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 30 }} onClick={(e) => toggleWishlist(destination, e)}>
+                  {wishlistMap[destination.id] ? (
+                    <button className="wishlist-btn wishlist-btn-sm active" title="Remove from wishlist"><i className="bi bi-heart-fill" /></button>
+                  ) : (
+                    <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
+                  )}
+                </div>
                 <ImageCarousel images={destination.images || (destination.image ? [destination.image] : [])} height={'180px'} />
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-start mb-2">
@@ -195,85 +240,7 @@ export default function BestDestinations({ title = 'Best Destinations' }) {
     );
   };
 
-      // Detail modal similar to SmartRecommendations
-      function DetailModal({ dest, onClose }) {
-        if (!dest) return null;
-        return (
-          <div
-            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-            style={{ zIndex: 1050, background: 'rgba(0,0,0,0.6)' }}
-            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="bg-white shadow-lg rounded position-relative" style={{ width: '90%', maxWidth: '1000px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
-              <div className="modal-close-overlay">
-                <button aria-label="Close" onClick={onClose}>✕</button>
-              </div>
-              <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
-                <div className="col-md-7" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <ImageCarousel images={dest.images || (dest.image ? [dest.image] : [])} height={'100%'} fit={'contain'} />
-                </div>
-                <div className="col-md-5 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
-                  <div className="d-flex justify-content-between align-items-start mb-2">
-                    <div>
-                      <h3 className="fw-bold mb-1">{dest.name}</h3>
-                      <div className="text-muted small">{dest.cityName}{dest.regionName ? `, ${dest.regionName}` : ''}</div>
-                    </div>
-                    <div className="text-warning text-end">
-                      <div><i className="bi bi-star-fill"></i> {dest.rating}</div>
-                    </div>
-                  </div>
-
-                  <p className="text-muted small mb-3">{dest.description}</p>
-
-                  <div className="mb-3">
-                    {(dest.tags || []).map((tag, idx) => (
-                      <span key={idx} className="badge bg-light text-dark border me-1">{tag}</span>
-                    ))}
-                  </div>
-
-                  <div className="mt-auto">
-                    <div className="mb-3">
-                      <strong>Estimated Budget:</strong>
-                      <div className="text-muted small">{(dest.estimatedCost && typeof dest.estimatedCost === 'number') ? `₱${dest.estimatedCost.toLocaleString()}` : (dest.budgetBreakdown ? 'See breakdown' : 'Varies')}</div>
-                    </div>
-
-                    <div className="card p-3 border">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <div>
-                          <div className="small text-muted">Contact</div>
-                          <div className="fw-bold">{dest.hostName || 'Local Host'}</div>
-                        </div>
-                        <div className="text-end small text-muted">Verified</div>
-                      </div>
-
-                      <div className="small mb-2">Phone: {dest.phone || 'Not provided'}</div>
-                      <div className="small mb-3">Email: {dest.email || 'Not provided'}</div>
-
-                      <div className="d-flex gap-2">
-                        { (dest.phone) ? (
-                          <a className="btn btn-outline-primary btn-sm" href={`tel:${dest.phone}`}>Call</a>
-                        ) : (
-                          <button className="btn btn-outline-secondary btn-sm" disabled>Call</button>
-                        )}
-
-                        { (dest.email) ? (
-                          <a className="btn btn-primary btn-sm" href={`mailto:${dest.email}`}>Email</a>
-                        ) : (
-                          <button className="btn btn-secondary btn-sm" disabled>Email</button>
-                        )}
-
-                        <button className="btn btn-outline-dark btn-sm ms-auto" onClick={onClose}>Close</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      }
+      
 
   return (
     <div className="container py-5">
@@ -296,7 +263,10 @@ export default function BestDestinations({ title = 'Best Destinations' }) {
         </>
       )}
       {selectedDestination && (
-        <DetailModal dest={selectedDestination} onClose={() => setSelectedDestination(null)} />
+        <DestinationDetailModal
+          dest={selectedDestination}
+          onClose={() => setSelectedDestination(null)}
+        />
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { collection, getDocs, addDoc, query, where, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, query, where, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 function Destinations({ user, initialPlan }) {
@@ -7,12 +7,19 @@ function Destinations({ user, initialPlan }) {
   const [editingId, setEditingId] = useState(null);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [recommendedPlaces, setRecommendedPlaces] = useState([]);
+    const [wishlistMap, setWishlistMap] = useState({});
   const [selectedPlaces, setSelectedPlaces] = useState([]);
   const [availableCities, setAvailableCities] = useState([]);
   const [allAdminPlaces, setAllAdminPlaces] = useState([]);
   const [selectedPlaceDetails, setSelectedPlaceDetails] = useState(null);
+  const [selectionWarning, setSelectionWarning] = useState(null);
+  const [itineraryToShow, setItineraryToShow] = useState(null);
   const [formData, setFormData] = useState({
     destination: '',
+    pax: 1,
+    // budgetPerPax shown to user (may be adjusted by duration logic)
+    budgetPerPax: 5000,
+    // total budget (adjusted) shown to user
     budget: 5000,
     budgetAllocation: {
       accommodation: 40,
@@ -24,6 +31,13 @@ function Destinations({ user, initialPlan }) {
     endDate: '',
     preferredTime: 'morning'
   });
+  // internal baseline value representing user's entered per-pax budget (before duration adjustment)
+  const [baseBudgetPerPax, setBaseBudgetPerPax] = useState(5000);
+  // track last edited mode to infer how to compute base values
+  const [lastEdited, setLastEdited] = useState('budgetPerPax');
+  // computed values
+  const [numberOfDays, setNumberOfDays] = useState(1);
+  
   const [loading, setLoading] = useState(false);
   const formRef = useRef(null);
 
@@ -63,6 +77,47 @@ function Destinations({ user, initialPlan }) {
     ]
   };
 
+  const handleViewItinerary = (plan) => {
+    try {
+      const itin = generateItineraryFromPlan(plan);
+      setItineraryToShow(itin);
+    } catch (e) {
+      console.error('Failed to generate itinerary', e);
+      alert('Unable to generate itinerary for this plan.');
+    }
+  };
+
+  // Helper to parse numeric budget from admin place document
+  const parseNumericBudget = (place) => {
+    if (!place) return 0;
+    // if estimatedCost present (set by other pages), prefer it
+    if (typeof place.estimatedCost === 'number' && place.estimatedCost > 0) return place.estimatedCost;
+    if (typeof place.budget === 'number' && place.budget > 0) return place.budget;
+    // try parsing string budgets like "₱5,000 - ₱15,000" or "5000"
+    const val = place.budget || place.estimatedCost || '';
+    if (typeof val === 'string') {
+      const cleaned = val.replace(/[_,₱\s]/g, '');
+      const nums = cleaned.match(/\d+/g);
+      if (nums && nums.length) return parseInt(nums[0], 10);
+    }
+    return 0;
+  };
+
+  // Helper to determine if a place is a festival-type listing (exclude from recommendations)
+  const isFestivalPlace = (place) => {
+    if (!place) return false;
+    const catFields = [];
+    if (place.category) catFields.push(place.category);
+    if (place.categories) catFields.push(...(Array.isArray(place.categories) ? place.categories : [place.categories]));
+    if (place.tags) catFields.push(...(Array.isArray(place.tags) ? place.tags : [place.tags]));
+    // normalize to array of strings
+    const cats = catFields.flat().map(c => (c || '').toString().toLowerCase());
+    if (cats.some(c => c.includes('festival'))) return true;
+    const name = (place.destinationName || place.name || place.cityName || '').toString().toLowerCase();
+    if (name.includes('festival')) return true;
+    return false;
+  };
+
   useEffect(() => {
     const fetchTripPlans = async () => {
       if (!user) return; // Don't fetch if no user
@@ -74,9 +129,28 @@ function Destinations({ user, initialPlan }) {
       );
       const querySnapshot = await getDocs(q);
       const plans = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // sort by updatedAt(createdAt) desc
+      plans.sort((a, b) => {
+        const tb = Date.parse(b.updatedAt || b.createdAt) || 0;
+        const ta = Date.parse(a.updatedAt || a.createdAt) || 0;
+        return tb - ta;
+      });
       setTripPlans(plans);
     };
     fetchTripPlans();
+    // wishlist listener
+    let unsubWish = null;
+    if (user) {
+      const qWish = query(collection(db, 'wishlists'), where('userId', '==', user.uid));
+      unsubWish = onSnapshot(qWish, snap => {
+        const map = {};
+        snap.forEach(d => {
+          const data = d.data(); if (data && data.placeId) map[data.placeId] = d.id;
+        });
+        setWishlistMap(map);
+      }, err => console.error('wishlists listen', err));
+    }
+    return () => { try { if (unsubWish) unsubWish(); } catch(e) {} };
     // Load admin-managed destinations used for dropdown / recommendations
     const loadAdminPlaces = async () => {
       try {
@@ -93,7 +167,161 @@ function Destinations({ user, initialPlan }) {
     loadAdminPlaces();
   }, [user]);
 
+  const baselineDays = 3; // baseline used to normalize daily cost (adjust as needed)
+
+  const computeDays = (start, end) => {
+    if (!start || !end) return 1;
+    const s = new Date(start);
+    const e = new Date(end);
+    const diff = Math.ceil((e - s) / (1000 * 60 * 60 * 24));
+    return Math.max(1, diff + 1);
+  };
+
+  const formatTimeFromMinutes = (totalMinutes) => {
+    const h = Math.floor(totalMinutes / 60) % 24;
+    const m = totalMinutes % 60;
+    const period = h >= 12 ? 'PM' : 'AM';
+    const hour12 = ((h + 11) % 12) + 1; // 1-12
+    const mm = m.toString().padStart(2, '0');
+    return `${hour12.toString().padStart(2, '0')}:${mm} ${period}`;
+  };
+
+  const generateTimeSlots = (preferred, count = 5) => {
+    const windows = {
+      morning: { start: 6, end: 12 },     // 6:00 - 12:00
+      afternoon: { start: 12, end: 18 },  // 12:00 - 18:00
+      evening: { start: 18, end: 24 },    // 18:00 - 24:00
+      flexible: { start: 6, end: 24 }
+    };
+    const w = windows[preferred] || windows.morning;
+    const totalMinutes = (w.end - w.start) * 60;
+    if (totalMinutes <= 0) return [formatTimeFromMinutes(w.start * 60)];
+    const step = Math.floor(totalMinutes / Math.max(1, count));
+    const slots = [];
+    for (let i = 0; i < count; i++) {
+      const minutes = Math.min(totalMinutes - 1, Math.round(i * step));
+      const t = w.start * 60 + minutes;
+      slots.push(formatTimeFromMinutes(t));
+    }
+    return slots;
+  };
+
+  // Recompute derived budgeting values whenever total budget, pax, or dates change
+  const [suggestion, setSuggestion] = useState(null);
+  useEffect(() => {
+    const days = computeDays(formData.startDate, formData.endDate);
+    setNumberOfDays(days);
+
+    const totalBudgetNum = formData.budget === '' ? 0 : Number(formData.budget);
+    const paxNum = Math.max(1, Number(formData.pax) || 1);
+
+    // derive budgetPerPax from totalBudget (primary input)
+    const budgetPerPaxNum = paxNum > 0 ? (totalBudgetNum / paxNum) : 0;
+    const budgetPerPaxRounded = Math.round(budgetPerPaxNum);
+
+    // category allocations (percentages)
+    const alloc = {
+      accommodation: totalBudgetNum * 0.4,
+      food: totalBudgetNum * 0.3,
+      transportation: totalBudgetNum * 0.2,
+      activities: totalBudgetNum * 0.1
+    };
+
+    const perPaxAlloc = {
+      accommodation: paxNum > 0 ? alloc.accommodation / paxNum : 0,
+      food: paxNum > 0 ? alloc.food / paxNum : 0,
+      transportation: paxNum > 0 ? alloc.transportation / paxNum : 0,
+      activities: paxNum > 0 ? alloc.activities / paxNum : 0
+    };
+
+    // date-based suggestion logic
+    const dailyBudgetPerPax = budgetPerPaxNum / Math.max(1, baselineDays);
+    const expectedBudgetPerPax = dailyBudgetPerPax * days;
+    const expectedTotalBudget = expectedBudgetPerPax * paxNum;
+
+    // update formData derived fields (do not override when user actively editing fields)
+    setFormData(prev => {
+      const next = { ...prev };
+      if (lastEdited !== 'budgetPerPax') next.budgetPerPax = budgetPerPaxRounded;
+      if (lastEdited !== 'budget') next.budget = String(totalBudgetNum);
+      return next;
+    });
+    setBaseBudgetPerPax(budgetPerPaxRounded);
+
+    if (expectedTotalBudget > totalBudgetNum) {
+      setSuggestion({
+        needsIncrease: true,
+        expectedTotalBudget: Math.round(expectedTotalBudget),
+        expectedBudgetPerPax: Math.round(expectedBudgetPerPax)
+      });
+    } else {
+      setSuggestion({ needsIncrease: false, expectedTotalBudget: Math.round(expectedTotalBudget), expectedBudgetPerPax: Math.round(expectedBudgetPerPax) });
+    }
+
+    // destination-based minimum budget suggestion
+    let minRequiredTotal = 0;
+    try {
+      const sel = (formData.destination || '').toString().toLowerCase();
+      const destMatches = allAdminPlaces.filter(p => {
+        const city = (p.cityName || '').toString().toLowerCase();
+        const name = (p.destinationName || '').toString().toLowerCase();
+        const region = (p.regionName || '').toString().toLowerCase();
+        return sel && (city === sel || name === sel || region === sel);
+      });
+      const budgets = destMatches.map(p => parseNumericBudget(p)).filter(b => !isNaN(b) && b > 0);
+      const avg = budgets.length ? budgets.reduce((a,b)=>a+b,0)/budgets.length : 0;
+      // treat avg as a per-place cost; scale by pax and days relative to baseline
+      if (avg > 0) {
+        minRequiredTotal = Math.round(avg * paxNum * (days / Math.max(1, baselineDays)));
+      }
+    } catch (err) {
+      minRequiredTotal = 0;
+    }
+
+    // ensure suggestion.minRequiredTotal is at least the date-based expected total or the city-based minimum
+    setSuggestion(prev => ({ ...prev, minRequiredTotal: Math.max(Math.round(expectedTotalBudget), minRequiredTotal, prev?.minRequiredTotal || 0) }));
+
+    // store allocations in component state (for display)
+    setAllocations({ alloc, perPaxAlloc });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.budget, formData.pax, formData.startDate, formData.endDate, formData.destination, allAdminPlaces]);
+
+  // local state to hold allocations for UI
+  const [allocations, setAllocations] = useState({ alloc: null, perPaxAlloc: null });
+
   const handleInputChange = (field, value) => {
+    // allow empty string for controlled numeric inputs so user can backspace
+    if (field === 'pax') {
+      // keep raw string in state while typing; validation happens on submit/save
+      setFormData(prev => ({ ...prev, pax: value }));
+      setLastEdited('pax');
+      return;
+    }
+
+    if (field === 'budgetPerPax') {
+      // keep raw string for the input and compute total budget = budgetPerPax * pax
+      const vnum = value === '' ? 0 : Number(value);
+      setFormData(prev => {
+        const paxNum = Math.max(1, Number(prev.pax) || 1);
+        const total = isNaN(vnum) ? prev.budget : (vnum * paxNum);
+        return { ...prev, budgetPerPax: value, budget: String(total) };
+      });
+      setBaseBudgetPerPax(isNaN(vnum) ? 0 : vnum);
+      setLastEdited('budgetPerPax');
+      return;
+    }
+
+    if (field === 'budget') {
+      setFormData(prev => ({ ...prev, budget: value }));
+      const vnum = value === '' ? 0 : Number(value);
+      const paxNum = Math.max(1, Number(formData.pax) || 1);
+      const impliedPerPax = isNaN(vnum) || vnum <= 0 ? 0 : Math.round(vnum / paxNum);
+      setBaseBudgetPerPax(impliedPerPax);
+      setLastEdited('budget');
+      return;
+    }
+
+    // dates and other fields
     setFormData({ ...formData, [field]: value });
   };
 
@@ -112,6 +340,28 @@ function Destinations({ user, initialPlan }) {
     setLoading(true);
 
     try {
+      // Basic validations
+      if (!formData.startDate || !formData.endDate) {
+        alert('Please select start and end dates for the trip.');
+        setLoading(false);
+        return;
+      }
+      const days = computeDays(formData.startDate, formData.endDate);
+      if (days < 1) {
+        alert('End date must not be earlier than start date.');
+        setLoading(false);
+        return;
+      }
+      if (!formData.pax || Number(formData.pax) < 1) {
+        alert('Pax must be at least 1.');
+        setLoading(false);
+        return;
+      }
+      if (!formData.budget || Number(formData.budget) <= 0) {
+        alert('Budget must be greater than 0.');
+        setLoading(false);
+        return;
+      }
       // Calculate budget breakdown
       const budgetBreakdown = {
         accommodation: (formData.budget * formData.budgetAllocation.accommodation) / 100,
@@ -139,17 +389,44 @@ function Destinations({ user, initialPlan }) {
         });
       }
 
-      // filter by numeric budget when provided by admin doc
+      // filter by per-pax budget: show destinations whose admin budget is <= budgetPerPax
+      const paxNum = Math.max(1, Number(formData.pax) || 1);
+      // derive numeric budgetPerPax: prefer explicit field, otherwise compute from total budget
+      const budgetPerPaxNum = (formData.budgetPerPax === '' || formData.budgetPerPax == null)
+        ? (formData.budget === '' ? 0 : (Number(formData.budget) / paxNum))
+        : Number(formData.budgetPerPax);
+
+      // exclude festival listings and those above per-pax budget
       const filteredPlaces = matches.filter(place => {
-        const b = Number(place.budget);
-        if (!isNaN(b) && b > 0) return b <= formData.budget;
+        if (isFestivalPlace(place)) return false;
+        const placeBudget = parseNumericBudget(place) || 0;
+        if (placeBudget > 0) {
+          return budgetPerPaxNum >= placeBudget;
+        }
         return true;
       });
+
+      // If no places fit the per-pax budget, compute and set a stronger suggestion based on city averages
+      if (filteredPlaces.length === 0) {
+        const sel = (formData.destination || '').toString().toLowerCase();
+        const destMatches = allAdminPlaces.filter(p => {
+          const city = (p.cityName || '').toString().toLowerCase();
+          const name = (p.destinationName || '').toString().toLowerCase();
+          const region = (p.regionName || '').toString().toLowerCase();
+          return sel && (city === sel || name === sel || region === sel);
+        });
+        const budgets = destMatches.map(p => parseNumericBudget(p)).filter(b => !isNaN(b) && b > 0);
+        const avg = budgets.length ? budgets.reduce((a,b)=>a+b,0)/budgets.length : 0;
+        // minimal per-pax needed to afford an average place
+        const minimalPerPaxNeeded = Math.round(avg);
+        const minimalTotalNeeded = minimalPerPaxNeeded * paxNum;
+        setSuggestion(prev => ({ ...(prev||{}), minRequiredTotal: Math.max(prev?.minRequiredTotal||0, minimalTotalNeeded) }));
+      }
 
       setRecommendedPlaces(filteredPlaces.map(p => ({
         name: p.destinationName || p.cityName || 'Unknown',
         type: (p.category && p.category[0]) || 'General',
-        budget: Number(p.budget) || 0,
+        budget: parseNumericBudget(p) || 0,
         rating: Number(p.rating) || 0,
         image: (p.images && p.images[0]) || p.imageUrl || '',
         raw: p
@@ -163,14 +440,58 @@ function Destinations({ user, initialPlan }) {
     }
   };
 
+  const toggleWishlist = async (place, e) => {
+    if (e) e.stopPropagation();
+    if (!user) { alert('Please log in to add to wishlist'); return; }
+    const placeId = (place.raw && place.raw.id) || place.id || place.raw?.destinationId || place.raw?.destinationId || place.name;
+    try {
+      if (wishlistMap[placeId]) {
+        await deleteDoc(doc(db, 'wishlists', wishlistMap[placeId]));
+      } else {
+        await addDoc(collection(db, 'wishlists'), {
+          userId: user.uid,
+          placeId,
+          placeData: place,
+          createdAt: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.error('Failed to toggle wishlist', err);
+      alert('Failed to update wishlist');
+    }
+  };
+
   const togglePlaceSelection = (place) => {
     setSelectedPlaces(prev => {
       const isSelected = prev.some(p => p.name === place.name);
+      let next;
       if (isSelected) {
-        return prev.filter(p => p.name !== place.name);
+        next = prev.filter(p => p.name !== place.name);
       } else {
-        return [...prev, place];
+        next = [...prev, place];
       }
+
+      // compute selection cost and warn if exceeds activities allocation
+      try {
+        const paxNum = Math.max(1, Number(formData.pax) || 1);
+        const selectedPerPax = next.reduce((sum, sp) => sum + (Number(sp.budget) || parseNumericBudget(sp.raw || sp) || 0), 0);
+        const selectedTotal = selectedPerPax * paxNum;
+        const totalBudgetNum = formData.budget === '' ? 0 : Number(formData.budget);
+        const activitiesAllocationTotal = (totalBudgetNum * (formData.budgetAllocation.activities || 0)) / 100;
+        const timeMultiplier = (formData.preferredTime === 'evening') ? 1.2 : (formData.preferredTime === 'afternoon' ? 1.1 : 1.0);
+        const adjustedActivitiesBudget = activitiesAllocationTotal * timeMultiplier;
+        if (selectedTotal > adjustedActivitiesBudget) {
+          // compute minimal total needed so activities allocation covers selectedTotal
+          const minimalTotalNeeded = Math.round((selectedTotal / timeMultiplier) / Math.max(0.01, (formData.budgetAllocation.activities || 0) / 100));
+          setSelectionWarning({ needsIncrease: true, minimalTotalNeeded, selectedTotal });
+        } else {
+          setSelectionWarning(null);
+        }
+      } catch (e) {
+        setSelectionWarning(null);
+      }
+
+      return next;
     });
   };
 
@@ -189,11 +510,44 @@ function Destinations({ user, initialPlan }) {
         transportation: (formData.budget * formData.budgetAllocation.transportation) / 100
       };
 
+      // validate before saving
+      const days = computeDays(formData.startDate, formData.endDate);
+      if (days < 1) {
+        alert('End date must not be earlier than start date.');
+        setLoading(false);
+        return;
+      }
+      if (!formData.pax || Number(formData.pax) < 1) {
+        alert('Pax must be at least 1.');
+        setLoading(false);
+        return;
+      }
+      if (!formData.budget || Number(formData.budget) <= 0) {
+        alert('Budget must be greater than 0.');
+        setLoading(false);
+        return;
+      }
+
+      // Before saving, ensure selected places fit within activities allocation
+      if (selectionWarning && selectionWarning.needsIncrease) {
+        alert('Selected places exceed your activities allocation. Increase total budget or remove some places before saving.');
+        setLoading(false);
+        return;
+      }
+
       if (editingId) {
         // Update existing trip plan
         await updateDoc(doc(db, 'tripPlans', editingId), {
           ...formData,
+          pax: formData.pax,
+          numberOfDays: days,
+          adjustedBudgetPerPax: formData.budgetPerPax,
+          adjustedTotalBudget: formData.budget,
+          baseBudgetPerPax,
           budgetBreakdown,
+          allocations: allocations.alloc,
+          perPaxAllocations: allocations.perPaxAlloc,
+          suggestion,
           selectedPlaces: selectedPlaces,
           recommendedPlaces: recommendedPlaces,
           updatedAt: new Date().toISOString()
@@ -204,7 +558,15 @@ function Destinations({ user, initialPlan }) {
         // Save new trip plan to Firestore
         await addDoc(collection(db, 'tripPlans'), {
           ...formData,
+          pax: formData.pax,
+          numberOfDays: days,
+          adjustedBudgetPerPax: formData.budgetPerPax,
+          adjustedTotalBudget: formData.budget,
+          baseBudgetPerPax,
           budgetBreakdown,
+          allocations: allocations.alloc,
+          perPaxAllocations: allocations.perPaxAlloc,
+          suggestion,
           selectedPlaces: selectedPlaces,
           recommendedPlaces: recommendedPlaces,
           userId: user.uid,
@@ -217,6 +579,8 @@ function Destinations({ user, initialPlan }) {
       // Reset form and recommendations
       setFormData({
         destination: '',
+        pax: 1,
+        budgetPerPax: 5000,
         budget: 5000,
         budgetAllocation: {
           accommodation: 40,
@@ -228,6 +592,7 @@ function Destinations({ user, initialPlan }) {
         endDate: '',
         preferredTime: 'morning'
       });
+      setBaseBudgetPerPax(5000);
       setShowRecommendations(false);
       setRecommendedPlaces([]);
       setSelectedPlaces([]);
@@ -239,6 +604,11 @@ function Destinations({ user, initialPlan }) {
       );
       const querySnapshot = await getDocs(q);
       const plans = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      plans.sort((a, b) => {
+        const tb = Date.parse(b.updatedAt || b.createdAt) || 0;
+        const ta = Date.parse(a.updatedAt || a.createdAt) || 0;
+        return tb - ta;
+      });
       setTripPlans(plans);
     } catch (error) {
       alert('Error saving trip plan: ' + error.message);
@@ -250,12 +620,15 @@ function Destinations({ user, initialPlan }) {
   const handleEdit = (plan) => {
     setFormData({
       destination: plan.destination,
+      pax: plan.pax || 1,
+      budgetPerPax: plan.adjustedBudgetPerPax || plan.budgetPerPax || Math.round((plan.budget || 0) / (plan.pax || 1)),
       budget: plan.budget,
       budgetAllocation: plan.budgetAllocation,
       startDate: plan.startDate,
       endDate: plan.endDate,
       preferredTime: plan.preferredTime
     });
+    setBaseBudgetPerPax(plan.baseBudgetPerPax || plan.budgetPerPax || Math.round((plan.budget || 0) / Math.max(1, plan.pax || 1)));
     // restore selected places/recommendations so user can continue editing
     setSelectedPlaces(plan.selectedPlaces || []);
     setRecommendedPlaces(plan.recommendedPlaces || []);
@@ -283,16 +656,92 @@ function Destinations({ user, initialPlan }) {
       );
       const querySnapshot = await getDocs(q);
       const plans = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      plans.sort((a, b) => {
+        const tb = Date.parse(b.updatedAt || b.createdAt) || 0;
+        const ta = Date.parse(a.updatedAt || a.createdAt) || 0;
+        return tb - ta;
+      });
       setTripPlans(plans);
     } catch (error) {
       alert('Error deleting trip plan: ' + error.message);
     }
   };
 
+  // Generate a simple day-by-day itinerary from a saved plan
+  const generateItineraryFromPlan = (plan) => {
+    if (!plan) return null;
+    const start = new Date(plan.startDate);
+    const end = new Date(plan.endDate);
+    const days = computeDays(plan.startDate, plan.endDate);
+    const places = plan.selectedPlaces || [];
+    const preferred = plan.preferredTime || 'morning';
+
+    const slots = generateTimeSlots(preferred, 5);
+
+    let itinerary = [];
+    for (let i = 0; i < days; i++) {
+      const dayDate = new Date(start);
+      dayDate.setDate(start.getDate() + i);
+      const dayLabel = `Day ${i + 1}`;
+
+      // assign 1-2 places per day depending on number of places and prefer preferred time window
+      const activities = [];
+      const placesForDay = [];
+      // Distribute places roughly evenly
+      if (places.length > 0) {
+        const perDay = Math.max(1, Math.ceil(places.length / days));
+        const startIdx = i * perDay;
+        for (let j = 0; j < perDay; j++) {
+          const p = places[(startIdx + j) % places.length];
+          if (p) placesForDay.push(p);
+        }
+      }
+
+      // Map places into slots starting at preferred time index so main activities fall into the preferred window
+      const preferredStartIndex = (preferred === 'morning') ? 0 : (preferred === 'afternoon') ? 1 : (preferred === 'evening') ? 2 : 0;
+      const slotToPlace = new Array(slots.length).fill(null);
+      for (let j = 0; j < placesForDay.length; j++) {
+        const slotIdx = (preferredStartIndex + j) % slots.length;
+        slotToPlace[slotIdx] = placesForDay[j];
+      }
+
+      const mealLabel = (preferred === 'evening') ? 'Dinner' : 'Lunch';
+
+      for (let s = 0; s < slots.length; s++) {
+        const place = slotToPlace[s] || null;
+        const image = place ? (place.image || place.raw?.images?.[0] || place.raw?.imageUrl || '') : '';
+        if (s === 0) {
+          activities.push({ time: slots[s], activity: place ? `Visit ${place.name}` : 'Breakfast / Travel', notes: place && place.raw?.notes ? place.raw.notes : (place ? place.type : 'Start your day'), image });
+        } else if (s === 1 && place) {
+          activities.push({ time: slots[s], activity: `Explore ${place.name}`, notes: place.raw?.notes || 'Enjoy the activity', image });
+        } else if (s === 2) {
+          activities.push({ time: slots[s], activity: mealLabel, notes: mealLabel === 'Lunch' ? 'Try local cuisine' : 'Enjoy dinner at a local spot', image: '' });
+        } else if (s === 3) {
+          activities.push({ time: slots[s], activity: place ? `Continue at ${place.name}` : 'Free time', notes: 'Relax or explore', image });
+        } else {
+          activities.push({ time: slots[s], activity: 'Return to Hotel / Rest', notes: '', image: '' });
+        }
+      }
+
+      itinerary.push({ day: dayLabel, date: dayDate.toISOString().split('T')[0], activities });
+    }
+
+    return {
+      title: `${plan.destination} Trip`,
+      startDate: plan.startDate,
+      endDate: plan.endDate,
+      pax: plan.pax || 1,
+      numberOfDays: days,
+      items: itinerary
+    };
+  };
+
   const handleCancelEdit = () => {
     setEditingId(null);
     setFormData({
       destination: '',
+      pax: 1,
+      budgetPerPax: 5000,
       budget: 5000,
       budgetAllocation: {
         accommodation: 40,
@@ -304,6 +753,7 @@ function Destinations({ user, initialPlan }) {
       endDate: '',
       preferredTime: 'morning'
     });
+    setBaseBudgetPerPax(5000);
   };
 
   // If the page was opened with an initial plan (via navigation state), start editing it
@@ -383,26 +833,75 @@ function Destinations({ user, initialPlan }) {
                   </div>
                 </div>
 
-                {/* Budget */}
-                <div className="mb-4">
-                  <label className="form-label fw-bold">
-                    <i className="bi bi-wallet2 text-success me-2"></i>
-                    Total Budget: ₱{formData.budget.toLocaleString()}
-                  </label>
-                  <input
-                    type="range"
-                    className="form-range"
-                    min="1000"
-                    max="500000"
-                    step="1000"
-                    value={formData.budget}
-                    onChange={(e) => handleInputChange('budget', parseInt(e.target.value))}
-                  />
-                  <div className="d-flex justify-content-between small text-muted">
-                    <span>₱1,000</span>
-                    <span>₱500,000</span>
+                {/* Pax and Budget Inputs */}
+                <div className="row mb-4">
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold">
+                      <i className="bi bi-people-fill text-info me-2"></i>
+                      Pax
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="form-control form-control-lg"
+                      value={formData.pax}
+                      onChange={(e) => handleInputChange('pax', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold">
+                      <i className="bi bi-cash-stack text-success me-2"></i>
+                      Budget per Pax (₱)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="form-control form-control-lg"
+                      value={formData.budgetPerPax}
+                      onChange={(e) => handleInputChange('budgetPerPax', e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold">
+                      <i className="bi bi-wallet2 text-success me-2"></i>
+                      Total Budget (₱)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="form-control form-control-lg"
+                      value={formData.budget}
+                      onChange={(e) => handleInputChange('budget', e.target.value)}
+                    />
                   </div>
                 </div>
+                <div className="mb-3 small text-muted">
+                  <strong>Trip duration:</strong> {numberOfDays} day{numberOfDays>1?'s':''} — budgets adjust automatically based on duration.
+                </div>
+                {/* Allocation Summary */}
+                {allocations && allocations.alloc && (
+                  <div className="mb-4">
+                    <h6 className="fw-bold">Auto Allocation</h6>
+                    <div className="row g-2 small">
+                      <div className="col-6">Accommodation: <strong>₱{Math.round(allocations.alloc.accommodation).toLocaleString()}</strong></div>
+                      <div className="col-6">Per Pax: <strong>₱{Math.round(allocations.perPaxAlloc.accommodation).toLocaleString()}</strong></div>
+                      <div className="col-6">Food: <strong>₱{Math.round(allocations.alloc.food).toLocaleString()}</strong></div>
+                      <div className="col-6">Per Pax: <strong>₱{Math.round(allocations.perPaxAlloc.food).toLocaleString()}</strong></div>
+                      <div className="col-6">Transportation: <strong>₱{Math.round(allocations.alloc.transportation).toLocaleString()}</strong></div>
+                      <div className="col-6">Per Pax: <strong>₱{Math.round(allocations.perPaxAlloc.transportation).toLocaleString()}</strong></div>
+                      <div className="col-6">Activities: <strong>₱{Math.round(allocations.alloc.activities).toLocaleString()}</strong></div>
+                      <div className="col-6">Per Pax: <strong>₱{Math.round(allocations.perPaxAlloc.activities).toLocaleString()}</strong></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Suggestion */}
+                {suggestion && suggestion.needsIncrease && (
+                  <div className="alert alert-warning">
+                    <strong>Suggestion:</strong> For the selected dates we recommend a total budget of <strong>₱{suggestion.expectedTotalBudget.toLocaleString()}</strong> (≈ ₱{suggestion.expectedBudgetPerPax.toLocaleString()} per pax) to maintain the same daily spending.
+                  </div>
+                )}
 
                 {/* Budget Allocation */}
                 <div className="mb-4">
@@ -552,6 +1051,12 @@ function Destinations({ user, initialPlan }) {
                 </div>
 
                 {/* Submit Button */}
+                {suggestion && suggestion.minRequiredTotal > 0 && Number(formData.budget || 0) < suggestion.minRequiredTotal && (
+                  <div className="alert alert-warning">
+                    <strong>Budget may be low for {formData.destination || 'this destination'}</strong>. Recommended minimum: <strong>₱{suggestion.minRequiredTotal.toLocaleString()}</strong>. You can still get recommendations, but consider increasing your budget.
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   className="btn btn-danger btn-lg w-100 py-3 fw-bold"
@@ -625,6 +1130,14 @@ function Destinations({ user, initialPlan }) {
                                   </div>
                                 </div>
                               )}
+                              {/* wishlist heart */}
+                              <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 30 }} onClick={(e) => toggleWishlist(place, e)}>
+                                {wishlistMap[(place.raw && place.raw.id) || place.id || place.name] ? (
+                                  <button className="wishlist-btn wishlist-btn-sm active" title="Remove from wishlist"><i className="bi bi-heart-fill" /></button>
+                                ) : (
+                                  <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
+                                )}
+                              </div>
                               <img 
                                 src={place.image} 
                                 alt={place.name}
@@ -659,6 +1172,21 @@ function Destinations({ user, initialPlan }) {
                     </div>
 
                     <div className="text-center">
+                      {selectionWarning && selectionWarning.needsIncrease && (
+                        <div className="alert alert-warning mb-3">
+                          <strong>Selected places exceed activities budget.</strong>
+                          Recommended total to cover selected places: <strong>₱{selectionWarning.minimalTotalNeeded?.toLocaleString?.() || (selectionWarning.minimalTotalNeeded)}</strong>.
+                          <div className="mt-2">
+                            <button className="btn btn-sm btn-outline-primary me-2" onClick={() => {
+                              // apply suggested total
+                              setFormData(prev => ({ ...prev, budget: String(selectionWarning.minimalTotalNeeded) }));
+                              setSelectionWarning(null);
+                            }}>Apply Suggested Budget</button>
+                            <button className="btn btn-sm btn-outline-secondary" onClick={() => setSelectionWarning(null)}>Ignore</button>
+                          </div>
+                        </div>
+                      )}
+
                       <button 
                         className="btn btn-danger btn-lg px-5 py-3"
                         style={{ background: 'linear-gradient(to right, #FF385C, #E31C5F)', border: 'none' }}
@@ -707,6 +1235,13 @@ function Destinations({ user, initialPlan }) {
                               title="Edit"
                             >
                               <i className="bi bi-pencil"></i>
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={() => handleViewItinerary(plan)}
+                              title="View Itinerary"
+                            >
+                              <i className="bi bi-eye"></i>
                             </button>
                             <button 
                               className="btn btn-sm btn-outline-danger"
@@ -840,6 +1375,58 @@ function Destinations({ user, initialPlan }) {
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Itinerary Modal */}
+          {itineraryToShow && (
+            <div
+              className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+              style={{ zIndex: 1060, background: 'rgba(0,0,0,0.6)' }}
+              onClick={(e) => { if (e.target === e.currentTarget) setItineraryToShow(null); }}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="bg-white shadow-lg rounded" style={{ width: '92%', maxWidth: '1000px', maxHeight: '90vh', overflow: 'auto' }}>
+                <div className="p-4">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                      <h3 className="fw-bold mb-0">{itineraryToShow.title}</h3>
+                      <div className="small text-muted">{itineraryToShow.startDate} → {itineraryToShow.endDate} • {itineraryToShow.numberOfDays} day{itineraryToShow.numberOfDays>1?'s':''} • {itineraryToShow.pax} pax</div>
+                    </div>
+                    <div>
+                      <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => setItineraryToShow(null)}>Close</button>
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    {itineraryToShow.items.map((day, di) => (
+                      <div key={di} className="card mb-3 shadow-sm">
+                        <div className="card-body">
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <h6 className="mb-0 fw-bold">{day.day} — {day.date}</h6>
+                          </div>
+                          <ul className="list-unstyled mb-0 mt-2">
+                            {day.activities.map((act, ai) => (
+                              <li key={ai} className="d-flex align-items-start mb-2">
+                                <div style={{ width: '90px' }} className="text-muted small">{act.time}</div>
+                                <div className="d-flex">
+                                  {act.image ? (
+                                    <img src={act.image} alt={act.activity} style={{ width: '90px', height: '60px', objectFit: 'cover', borderRadius: '6px', marginRight: '12px' }} />
+                                  ) : null}
+                                  <div>
+                                    <div className="fw-bold small">{act.activity}</div>
+                                    {act.notes && <div className="small text-muted">{act.notes}</div>}
+                                  </div>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

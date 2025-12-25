@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { collection, /* getDocs, */ addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, addDoc, serverTimestamp, onSnapshot, query, where, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 function SmartRecommendationsPage({ user, onNavigate }) {
@@ -12,13 +12,31 @@ function SmartRecommendationsPage({ user, onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState(null);
+  const [wishlistMap, setWishlistMap] = useState({});
 
   // Load preferences and destinations from Firebase on mount
   useEffect(() => {
     loadPreferences();
     const unsub = loadDestinations();
+    // listen to wishlist changes for logged-in user
+    let unsubWish = null;
+    if (user) {
+      const q = query(collection(db, 'wishlists'), where('userId', '==', user.uid));
+      unsubWish = onSnapshot(q, (snap) => {
+        const map = {};
+        snap.forEach(d => {
+          const data = d.data(); if (data && data.placeId) map[data.placeId] = d.id;
+        });
+        setWishlistMap(map);
+      }, (err) => console.error('wishlist listen failed', err));
+    }
     return () => { if (typeof unsub === 'function') unsub(); };
   }, []);
+
+  useEffect(() => {
+    // clean up wishlist listener when user changes
+    return () => setWishlistMap({});
+  }, [user]);
 
   const loadPreferences = async () => {
     try {
@@ -239,6 +257,22 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
       .sort((a, b) => b.matchScore - a.matchScore);
   };
 
+  const toggleWishlist = async (destination, e) => {
+    e.stopPropagation();
+    if (!user) { alert('Please log in to add to wishlist'); return; }
+    const placeId = destination.id;
+    try {
+      if (wishlistMap[placeId]) {
+        await deleteDoc(doc(db, 'wishlists', wishlistMap[placeId]));
+      } else {
+        await addDoc(collection(db, 'wishlists'), { userId: user.uid, placeId, placeData: destination, createdAt: new Date().toISOString() });
+      }
+    } catch (err) {
+      console.error('Wishlist toggle failed', err);
+      alert('Failed to update wishlist');
+    }
+  };
+
   // Simple image carousel component (local to this page)
   function ImageCarousel({ images = [], height = '200px', fit = 'cover' }) {
     const [idx, setIdx] = useState(0);
@@ -379,8 +413,15 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
                     onClick={() => setSelectedDestination(destination)}
                     onKeyDown={(e) => { if (e.key === 'Enter') setSelectedDestination(destination); }}
                     className="card border-0 shadow-sm h-100"
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', position: 'relative' }}
                   >
+                    <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 30 }} onClick={(e) => toggleWishlist(destination, e)}>
+                      {wishlistMap[destination.id] ? (
+                        <button className="wishlist-btn wishlist-btn-sm active" title="Remove from wishlist"><i className="bi bi-heart-fill" /></button>
+                      ) : (
+                        <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
+                      )}
+                    </div>
                     {destination.isAISuggestion && (
                       <div className="position-absolute top-0 end-0 m-2">
                         <span className="badge bg-info">
