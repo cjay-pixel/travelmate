@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { collection, /* getDocs, */ onSnapshot, query, where, addDoc, deleteDoc, doc } from 'firebase/firestore';
@@ -160,7 +160,6 @@ function BudgetFriendlyPage({ user, onNavigate }) {
     const parseCost = (dest) => {
       if (typeof dest.estimatedCost === 'number') return dest.estimatedCost;
       if (!dest.estimatedCost && dest.budgetBreakdown) {
-        // try to sum breakdown values
         const vals = Object.values(dest.budgetBreakdown).filter(v => typeof v === 'number');
         if (vals.length) return vals.reduce((s, v) => s + v, 0);
       }
@@ -171,10 +170,28 @@ function BudgetFriendlyPage({ user, onNavigate }) {
       return Infinity;
     };
 
+    const days = calculateDays();
+    const effectiveDays = Math.max(1, days);
+    const budgetPerDay = Math.floor((filters.budget || 0) / effectiveDays);
+
+    // Determine destination's typical stay length (fallback to 2 days)
+    const typicalDaysFor = (dest) => {
+      if (!dest.duration) return 2;
+      const n = parseInt(dest.duration, 10);
+      if (!isNaN(n) && n > 0) return n;
+      const m = String(dest.duration).match(/(\d+)/);
+      if (m) return parseInt(m[1], 10) || 2;
+      return 2;
+    };
+
+    // For this budget-friendly view we filter by the admin-provided total cost
     return destinations
-      .map(dest => ({ ...dest, __cost: parseCost(dest) }))
-      .filter(dest => dest.__cost <= filters.budget)
-      .sort((a, b) => (a.__cost || Infinity) - (b.__cost || Infinity));
+      .map(dest => {
+        const total = parseCost(dest);
+        return { ...dest, __totalCost: total };
+      })
+      .filter(dest => dest.__totalCost <= (filters.budget || Infinity))
+      .sort((a, b) => (a.__totalCost || Infinity) - (b.__totalCost || Infinity));
   };
 
   const togglePreference = (prefId) => {
@@ -234,6 +251,90 @@ function BudgetFriendlyPage({ user, onNavigate }) {
     );
   }
 
+  // Helper to decide region (Luzon/Visayas/Mindanao) from destination data
+  const regionFor = (data) => {
+    const field = (data.regionName || data.region || data.province || '').toString().toLowerCase();
+    const city = (data.cityName || data.city || '').toString().toLowerCase();
+    const tags = (data.tags || data.category || []).map(t => String(t).toLowerCase());
+
+    if (/luzon/.test(field) || /luzon/.test(city) || tags.includes('luzon')) return 'Luzon';
+    if (/visayas/.test(field) || /visayas/.test(city) || tags.includes('visayas')) return 'Visayas';
+    if (/mindanao/.test(field) || /mindanao/.test(city) || tags.includes('mindanao')) return 'Mindanao';
+
+    const luzonKeywords = /(manila|metro manila|pangasinan|iloc|la union|benguet|ifugao|kalinga|isabela|pampanga|bulacan|rizal|cavite|laguna|batangas|quezon|albay|bicol|camarines|tarlac|pampanga)/i;
+    const visayasKeywords = /(cebu|bohol|leyte|samar|iloilo|negros|capiz|guimaras|antique|biliran)/i;
+    const mindanaoKeywords = /(davao|zamboanga|misamis|surigao|agusan|bukidnon|cotabato|sarangani|sultan|maguindanao|lanao|tawi|sulu)/i;
+
+    const combined = `${field} ${city}`;
+    if (luzonKeywords.test(combined)) return 'Luzon';
+    if (visayasKeywords.test(combined)) return 'Visayas';
+    if (mindanaoKeywords.test(combined)) return 'Mindanao';
+    return 'Other';
+  };
+
+  // RegionRow - horizontal scroll list for a region
+  function RegionRow({ region, items }) {
+    const containerRef = useRef(null);
+    const scroll = (dir = 'right') => {
+      const el = containerRef.current;
+      if (!el) return;
+      const amount = Math.round(el.clientWidth * 0.7);
+      el.scrollBy({ left: dir === 'right' ? amount : -amount, behavior: 'smooth' });
+    };
+
+    return (
+      <section className="mb-5">
+        <div className="d-flex align-items-center mb-3">
+          <h4 className="fw-bold me-3">{region}</h4>
+          <div className="ms-auto d-none d-md-flex gap-2">
+            <button className="btn btn-outline-secondary btn-sm" onClick={() => scroll('left')}>‹</button>
+            <button className="btn btn-outline-secondary btn-sm" onClick={() => scroll('right')}>›</button>
+          </div>
+        </div>
+
+        <div style={{ position: 'relative' }}>
+          <div ref={containerRef} className="d-flex gap-3 overflow-x-auto pb-2" style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}>
+            {items.map((destination) => (
+              <div key={destination.id} className="card border-0 shadow-sm" style={{ minWidth: 280, maxWidth: 320, scrollSnapAlign: 'start', cursor: 'pointer', position: 'relative' }} onClick={() => setSelectedDestination(destination)}>
+                <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 30 }} onClick={(e) => toggleWishlist(destination, e)}>
+                  {wishlistMap[destination.id] ? (
+                    <button className="wishlist-btn wishlist-btn-sm active" title="Remove from wishlist"><i className="bi bi-heart-fill" /></button>
+                  ) : (
+                    <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
+                  )}
+                </div>
+                <ImageCarousel images={destination.images || (destination.image ? [destination.image] : [])} height={'180px'} />
+                <div className="card-body">
+                  <div className="d-flex justify-content-between align-items-start mb-2">
+                    <h6 className="card-title fw-bold mb-0 small">{destination.name}{destination.cityName ? `, ${destination.cityName}` : ''}</h6>
+                    <div className="text-warning small"><i className="bi bi-star-fill"></i> {destination.rating || '—'}</div>
+                  </div>
+                  <p className="card-text text-muted small mb-2">{destination.description}</p>
+                  <div className="d-flex flex-wrap gap-1 mb-2">
+                    {(destination.tags || []).slice(0, 3).map((tag, idx) => (
+                      <span key={idx} className="badge bg-light text-dark border small">{tag}</span>
+                    ))}
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <small className="text-muted">
+                      <i className="bi bi-wallet2 me-1"></i>
+                      {(isFinite(destination.__totalCost)) ? `₱${destination.__totalCost.toLocaleString()}` : (destination.budgetBreakdown ? 'See breakdown' : 'Varies')}
+                    </small>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ position: 'absolute', right: 8, top: '40%', display: 'flex', gap: 6 }} className="d-md-none">
+            <button className="btn btn-outline-secondary btn-sm" onClick={() => scroll('left')}>‹</button>
+            <button className="btn btn-outline-secondary btn-sm" onClick={() => scroll('right')}>›</button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div>
       <Header user={user} onNavigate={onNavigate} />
@@ -259,18 +360,45 @@ function BudgetFriendlyPage({ user, onNavigate }) {
                   <i className="bi bi-wallet2 text-success me-2"></i>
                   Total Budget: ₱{filters.budget.toLocaleString()}
                 </label>
-                <input 
-                  type="range"
-                  className="form-range"
-                  min="5000"
-                  max="50000"
-                  step="1000"
-                  value={filters.budget}
-                  onChange={(e) => setFilters({...filters, budget: parseInt(e.target.value)})}
-                />
+                <div className="d-flex align-items-center gap-3">
+                  <input 
+                    type="range"
+                    className="form-range"
+                    min="100"
+                    max="1000000"
+                    step="100"
+                    value={filters.budget}
+                    onChange={(e) => setFilters({...filters, budget: parseInt(e.target.value) || 0})}
+                    style={{ flex: 1 }}
+                  />
+
+                  <div style={{ width: 160 }}>
+                    <div className="input-group">
+                      <span className="input-group-text">₱</span>
+                      <input
+                        type="number"
+                        className="form-control"
+                        min={100}
+                        max={1000000}
+                        step={100}
+                        value={filters.budget}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0;
+                          setFilters({...filters, budget: v === '' ? 0 : v});
+                        }}
+                        onBlur={(e) => {
+                          let v = parseInt(e.target.value, 10) || 0;
+                          if (v < 100) v = 100;
+                          if (v > 1000000) v = 1000000;
+                          setFilters({...filters, budget: v});
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
                 <div className="d-flex justify-content-between small text-muted">
-                  <span>₱5,000</span>
-                  <span>₱50,000</span>
+                  <span>₱100</span>
+                  <span>₱1,000,000</span>
                 </div>
               </div>
 
@@ -361,63 +489,44 @@ function BudgetFriendlyPage({ user, onNavigate }) {
         {/* Results Section */}
         {showResults && (
           <div>
+            {/* show computed budget-per-day when dates are set */}
+            {tripDays > 0 && (
+              <div className="mb-3">
+                <div className="alert alert-light">
+                  <strong>Budget per day:</strong> ₱{Math.floor((filters.budget || 0) / Math.max(1, tripDays)).toLocaleString()} • Trip days: <strong>{tripDays}</strong>
+                </div>
+              </div>
+            )}
             <h4 className="fw-bold mb-4">
               {getFilteredDestinations().length} Destinations Found Within Your Budget
             </h4>
 
-            <div className="row g-4">
-                {getFilteredDestinations().map((destination) => (
-                <div key={destination.id} className="col-md-6 col-lg-4">
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedDestination(destination)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') setSelectedDestination(destination); }}
-                    className="card border-0 shadow-sm h-100"
-                    style={{ cursor: 'pointer', position: 'relative' }}
-                  >
-                    <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 30 }} onClick={(e) => toggleWishlist(destination, e)}>
-                      {wishlistMap[destination.id] ? (
-                        <button className="wishlist-btn wishlist-btn-sm active" title="Remove from wishlist"><i className="bi bi-heart-fill" /></button>
-                      ) : (
-                        <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
-                      )}
-                    </div>
-                    <ImageCarousel images={destination.images || (destination.image ? [destination.image] : [])} height={'200px'} />
-                      <div className="card-body">
-                        <div className="d-flex justify-content-between align-items-start mb-2">
-                          <h5 className="card-title fw-bold mb-0">{destination.name}{destination.cityName ? `, ${destination.cityName}` : ''}</h5>
-                          <div className="text-warning">
-                            <i className="bi bi-star-fill"></i> {destination.rating || '—'}
-                          </div>
-                        </div>
+            {/* Group results by region */}
+            {(() => {
+              const list = getFilteredDestinations();
+              const groups = list.reduce((acc, d) => {
+                const r = regionFor(d);
+                if (!acc[r]) acc[r] = [];
+                acc[r].push(d);
+                return acc;
+              }, {});
 
-                        <p className="card-text text-muted small mb-3">{destination.description}</p>
-
-                        <div className="d-flex flex-wrap gap-1 mb-3">
-                          {(destination.tags || []).slice(0, 3).map((tag, idx) => (
-                            <span key={idx} className="badge bg-light text-dark border">
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-
-                                            <div className="d-flex justify-content-between align-items-center">
-                                              <small className="text-muted">
-                                                <i className="bi bi-wallet2 me-1"></i>
-                                                {(destination.estimatedCost && typeof destination.estimatedCost === 'number') ? `₱${destination.estimatedCost.toLocaleString()}` : 'Varies'}
-                                              </small>
-                                            </div>
-                      </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+              const regions = ['Luzon', 'Visayas', 'Mindanao', 'Other'];
+              return (
+                <>
+                  {regions.map(region => (
+                    groups[region] && groups[region].length > 0 ? (
+                      <RegionRow key={region} region={region} items={groups[region].slice(0, 12)} />
+                    ) : null
+                  ))}
+                </>
+              );
+            })()}
 
             {getFilteredDestinations().length === 0 && (
               <div className="text-center py-5">
                 <i className="bi bi-emoji-frown text-muted" style={{ fontSize: '3rem' }}></i>
-                <p className="text-muted mt-3">No destinations found within your budget. Try increasing your budget.</p>
+                <p className="text-muted mt-3">No destinations found within your budget and dates. Try adjusting your travel dates or making your trip shorter to see more budget-friendly options.</p>
               </div>
             )}
           
