@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import DestinationDetailModal from '../components/DestinationDetailModal';
+import { getPrimaryImage } from '../utils/imageHelpers';
 import { collection, query, where, getDocs, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -69,7 +70,7 @@ function WishlistPage({ user, onNavigate }) {
                         style={{ cursor: 'pointer' }}
                         onClick={() => handleOpen(place)}
                       >
-                        <img src={place.image || (place.images && place.images[0]) || 'https://via.placeholder.com/600x400'} alt={place.name || place.destinationName || ''} className="card-img-top" style={{ height: 180, objectFit: 'cover' }} />
+                        <img src={getPrimaryImage(place)} alt={place.name || place.destinationName || ''} className="card-img-top" style={{ height: 180, objectFit: 'cover' }} />
                         <div className="card-body">
                           <div className="d-flex justify-content-between align-items-start mb-2">
                             <h6 className="card-title fw-bold mb-0 small">{place.name || place.destinationName || 'Untitled'}</h6>

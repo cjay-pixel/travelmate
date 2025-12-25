@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { getPrimaryImage, getImageList } from '../utils/imageHelpers';
 import { db } from '../../firebase';
 
 function TripsPage({ user, onNavigate }) {
@@ -141,7 +142,7 @@ function TripsPage({ user, onNavigate }) {
       const activities = [];
       for (let s = 0; s < slots.length; s++) {
         const place = slotToPlace[s] || null;
-        const image = place ? (place.image || place.images?.[0] || '') : '';
+        const image = place ? getPrimaryImage(place) : '';
         if (s === 0) activities.push({ time: slots[s], activity: place ? `Visit ${place.name}` : 'Breakfast / Travel', notes: place?.notes || place?.type || '', image });
         else if (s === 1 && place) activities.push({ time: slots[s], activity: `Explore ${place.name}`, notes: place?.notes || '', image });
         else if (s === 2) activities.push({ time: slots[s], activity: mealLabel, notes: mealLabel === 'Lunch' ? 'Try local cuisine' : 'Enjoy dinner at a local spot', image: '' });
@@ -216,12 +217,12 @@ function TripsPage({ user, onNavigate }) {
                                 <div className="card border-0" style={{ backgroundColor: '#f8f9fa', cursor: 'pointer' }} onClick={() => setSelectedPlaceDetails(place)}>
                                   <div className="card-body p-2">
                                     <div className="d-flex align-items-center">
-                                      <img 
-                                        src={place.image} 
-                                        alt={place.name}
-                                        className="rounded"
-                                        style={{ width: '60px', height: '60px', objectFit: 'cover' }}
-                                      />
+                                        <img 
+                                          src={getPrimaryImage(place)} 
+                                          alt={place.name}
+                                          className="rounded"
+                                          style={{ width: '60px', height: '60px', objectFit: 'cover' }}
+                                        />
                                       <div className="ms-3 flex-grow-1">
                                         <h6 className="mb-1 small fw-bold">{place.name}</h6>
                                         <div className="d-flex gap-1">
@@ -268,7 +269,7 @@ function TripsPage({ user, onNavigate }) {
           <div className="bg-white shadow-lg rounded" style={{ width: '90%', maxWidth: '900px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
             <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
               <div className="col-md-6 d-flex align-items-center justify-content-center" style={{ background: '#f8f9fa' }}>
-                <img src={selectedPlaceDetails.image || selectedPlaceDetails.imageUrl || 'https://via.placeholder.com/600x400'} alt={selectedPlaceDetails.name || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={getPrimaryImage(selectedPlaceDetails)} alt={selectedPlaceDetails.name || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
               <div className="col-md-6 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
                 <div className="d-flex justify-content-between align-items-start mb-2">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Header from '../components/Header';
+import { getImageList } from '../utils/imageHelpers';
 import Footer from '../components/Footer';
 import { collection, /* getDocs, */ onSnapshot, query, where, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -303,7 +304,7 @@ function BudgetFriendlyPage({ user, onNavigate }) {
                     <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
                   )}
                 </div>
-                <ImageCarousel images={destination.images || (destination.image ? [destination.image] : [])} height={'180px'} />
+                <ImageCarousel images={getImageList(destination)} height={'180px'} />
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <h6 className="card-title fw-bold mb-0 small">{destination.name}{destination.cityName ? `, ${destination.cityName}` : ''}</h6>

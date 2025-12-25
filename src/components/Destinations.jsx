@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { getPrimaryImage } from '../utils/imageHelpers';
 import { collection, getDocs, addDoc, query, where, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -1139,7 +1140,7 @@ function Destinations({ user, initialPlan }) {
                                 )}
                               </div>
                               <img 
-                                src={place.image} 
+                                src={getPrimaryImage(place)} 
                                 alt={place.name}
                                 className="card-img-top"
                                 style={{ height: '200px', objectFit: 'cover', opacity: isSelected ? 0.9 : 1 }}
@@ -1279,7 +1280,7 @@ function Destinations({ user, initialPlan }) {
                                     <div className="card-body p-2">
                                       <div className="d-flex align-items-center">
                                         <img 
-                                          src={place.image} 
+                                          src={getPrimaryImage(place)} 
                                           alt={place.name}
                                           className="rounded"
                                           style={{ width: '60px', height: '60px', objectFit: 'cover' }}
@@ -1321,7 +1322,7 @@ function Destinations({ user, initialPlan }) {
               <div className="bg-white shadow-lg rounded" style={{ width: '90%', maxWidth: '900px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
                 <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
                   <div className="col-md-6 d-flex align-items-center justify-content-center" style={{ background: '#f8f9fa' }}>
-                    <img src={(selectedPlaceDetails.images && selectedPlaceDetails.images[0]) || selectedPlaceDetails.image || selectedPlaceDetails.imageUrl || 'https://via.placeholder.com/600x400'} alt={selectedPlaceDetails.name || selectedPlaceDetails.destinationName || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={getPrimaryImage(selectedPlaceDetails)} alt={selectedPlaceDetails.name || selectedPlaceDetails.destinationName || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                   <div className="col-md-6 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
                     <div className="d-flex justify-content-between align-items-start mb-2">

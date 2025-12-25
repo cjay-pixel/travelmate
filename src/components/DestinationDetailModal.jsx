@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getImageList } from '../utils/imageHelpers';
 
 // Small ImageCarousel used inside the modal
 function ImageCarousel({ images = [], height = '100%', fit = 'contain' }) {
@@ -38,8 +39,8 @@ export default function DestinationDetailModal({ dest, onClose, onOpenInPlanner 
     >
       <div className="bg-white shadow-lg rounded position-relative" style={{ width: '90%', maxWidth: '1000px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
         <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
-          <div className="col-md-7" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ImageCarousel images={dest.images || (dest.image ? [dest.image] : [])} height={'100%'} fit={'contain'} />
+            <div className="col-md-7" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ImageCarousel images={getImageList(dest)} height={'100%'} fit={'contain'} />
           </div>
           <div className="col-md-5 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
             <div className="d-flex justify-content-between align-items-start mb-2">

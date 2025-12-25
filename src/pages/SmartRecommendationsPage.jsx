@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
+import { getImageList } from '../utils/imageHelpers';
 import Footer from '../components/Footer';
 import { collection, getDocs, addDoc, serverTimestamp, onSnapshot, query, where, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -430,7 +431,7 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
                         </span>
                       </div>
                     )}
-                    <ImageCarousel images={destination.images} height={'200px'} />
+                    <ImageCarousel images={getImageList(destination)} height={'200px'} />
                     <div className="card-body">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <h5 className="card-title fw-bold mb-0">{destination.name}</h5>
@@ -478,7 +479,7 @@ Return ONLY a JSON array in this EXACT format (no markdown, no explanation):
                   </div>
                           <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
                             <div className="col-md-7" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <ImageCarousel images={selectedDestination.images} height={'100%'} fit={'contain'} />
+                              <ImageCarousel images={getImageList(selectedDestination)} height={'100%'} fit={'contain'} />
                             </div>
                             <div className="col-md-5 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
                       <div className="d-flex justify-content-between align-items-start mb-2">

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import DestinationDetailModal from './DestinationDetailModal';
+import { getImageList } from '../utils/imageHelpers';
 import { collection, /* getDocs, */ onSnapshot, query, where, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -203,7 +204,7 @@ export default function BestDestinations({ title = 'Best Destinations', user, on
 
         <div style={{ position: 'relative' }}>
           <div ref={containerRef} className="d-flex gap-3 overflow-x-auto pb-2" style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}>
-            {items.map((destination) => (
+                {items.map((destination) => (
               <div key={destination.id} className="card border-0 shadow-sm" style={{ minWidth: 280, maxWidth: 320, scrollSnapAlign: 'start', cursor: 'pointer', position: 'relative' }} onClick={() => setSelectedDestination(destination)}>
                 {/* Heart / wishlist */}
                 <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 30 }} onClick={(e) => toggleWishlist(destination, e)}>
@@ -213,7 +214,7 @@ export default function BestDestinations({ title = 'Best Destinations', user, on
                     <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
                   )}
                 </div>
-                <ImageCarousel images={destination.images || (destination.image ? [destination.image] : [])} height={'180px'} />
+                <ImageCarousel images={getImageList(destination)} height={'180px'} />
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <h6 className="card-title fw-bold mb-0 small">{destination.name}{destination.cityName ? `, ${destination.cityName}` : ''}</h6>

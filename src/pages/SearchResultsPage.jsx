@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import { getImageList, getPrimaryImage } from '../utils/imageHelpers';
 import { collection, /* getDocs, */ onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -153,7 +154,7 @@ function SearchResultsPage({ user, onNavigate, searchQuery }) {
                     className="card h-100 border-0 shadow-sm hover-shadow"
                     style={{ transition: 'all 0.3s', cursor: 'pointer' }}
                   >
-                    <ImageCarousel images={dest.images || (dest.image ? [dest.image] : [])} height={'200px'} />
+                    <ImageCarousel images={getImageList(dest)} height={'200px'} />
                     <div className="card-body">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div>
@@ -166,6 +167,18 @@ function SearchResultsPage({ user, onNavigate, searchQuery }) {
                         {(dest.tags || []).slice(0,3).map((tag, index) => (
                           <span key={index} className="badge bg-light text-dark me-1 mb-1">{tag}</span>
                         ))}
+                      </div>
+                      {/* Contact info - show host/phone/email similarly to other pages */}
+                      <div className="d-flex align-items-center gap-3 mb-2 small text-muted">
+                        { (dest.raw && (dest.raw.hostName || dest.raw.host)) ? (
+                          <div title="Host"><i className="bi bi-person-circle me-1"></i>{dest.raw.hostName || dest.raw.host}</div>
+                        ) : null }
+                        { dest.phone ? (
+                          <div title="Phone"><i className="bi bi-telephone me-1"></i><a href={`tel:${dest.phone}`} className="text-muted">{dest.phone}</a></div>
+                        ) : null }
+                        { dest.email ? (
+                          <div title="Email"><i className="bi bi-envelope me-1"></i><a href={`mailto:${dest.email}`} className="text-muted">{dest.email}</a></div>
+                        ) : null }
                       </div>
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
@@ -199,7 +212,7 @@ function SearchResultsPage({ user, onNavigate, searchQuery }) {
             </div>
             <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
               <div className="col-md-7" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ImageCarousel images={selectedDestination.images || (selectedDestination.image ? [selectedDestination.image] : [])} height={'100%'} fit={'contain'} />
+                <ImageCarousel images={getImageList(selectedDestination)} height={'100%'} fit={'contain'} />
               </div>
               <div className="col-md-5 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
                 <div className="d-flex justify-content-between align-items-start mb-2">
@@ -230,12 +243,27 @@ function SearchResultsPage({ user, onNavigate, searchQuery }) {
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <div>
                         <div className="small text-muted">Contact</div>
-                        <div className="fw-bold">Host</div>
+                        <div className="fw-bold">{(selectedDestination.raw && (selectedDestination.raw.hostName || selectedDestination.raw.host)) || selectedDestination.hostName || 'Host'}</div>
                       </div>
                       <div className="text-end small text-muted">Verified</div>
                     </div>
 
+                    <div className="small mb-2">Phone: {selectedDestination.phone || selectedDestination.raw?.phone || 'Not provided'}</div>
+                    <div className="small mb-3">Email: {selectedDestination.email || selectedDestination.raw?.email || 'Not provided'}</div>
+
                     <div className="d-flex gap-2">
+                      { (selectedDestination.phone || selectedDestination.raw?.phone) ? (
+                        <a className="btn btn-outline-primary btn-sm" href={`tel:${selectedDestination.phone || selectedDestination.raw?.phone}`}>Call</a>
+                      ) : (
+                        <button className="btn btn-outline-secondary btn-sm" disabled>Call</button>
+                      )}
+
+                      { (selectedDestination.email || selectedDestination.raw?.email) ? (
+                        <a className="btn btn-primary btn-sm" href={`mailto:${selectedDestination.email || selectedDestination.raw?.email}`}>Email</a>
+                      ) : (
+                        <button className="btn btn-secondary btn-sm" disabled>Email</button>
+                      )}
+
                       <button className="btn btn-outline-dark btn-sm ms-auto" onClick={() => setSelectedDestination(null)}>Close</button>
                     </div>
                   </div>
