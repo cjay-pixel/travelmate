@@ -1118,6 +1118,8 @@ function Destinations({ user, initialPlan }) {
                     <div className="row g-4 mb-4">
                       {recommendedPlaces.map((place, index) => {
                         const isSelected = selectedPlaces.some(p => p.name === place.name);
+                        const images = getImageList(place.raw || place) || [];
+                        const displayImages = images.slice(0, 3);
                         return (
                           <div key={index} className="col-md-6">
                             <div 
@@ -1147,14 +1149,25 @@ function Destinations({ user, initialPlan }) {
                                   <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
                                 )}
                               </div>
-                              <img 
-                                src={getPrimaryImage(place)} 
-                                alt={place.name}
-                                className="card-img-top"
-                                style={{ height: '200px', objectFit: 'cover', opacity: isSelected ? 0.9 : 1 }}
-                                onClick={(e) => { e.stopPropagation(); setSelectedPlaceDetails(place.raw || place); }}
-                                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://via.placeholder.com/600x400?text=No+Image'; }}
-                              />
+                              <div className="card-img-top" style={{ height: '200px', overflow: 'hidden', display: 'flex' }} onClick={(e) => { e.stopPropagation(); setSelectedPlaceDetails(place.raw || place); }}>
+                                {displayImages.length > 0 ? (
+                                  displayImages.map((src, i) => (
+                                    <img
+                                      key={i}
+                                      src={src}
+                                      alt={`${place.name} ${i + 1}`}
+                                      style={{ width: `${100 / displayImages.length}%`, height: '200px', objectFit: 'cover', opacity: isSelected ? 0.9 : 1 }}
+                                      onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://via.placeholder.com/600x400?text=No+Image'; }}
+                                    />
+                                  ))
+                                ) : (
+                                  <img
+                                    src={'https://via.placeholder.com/600x400?text=No+Image'}
+                                    alt={place.name}
+                                    style={{ width: '100%', height: '200px', objectFit: 'cover' }}
+                                  />
+                                )}
+                              </div>
                               <div className="card-body">
                                 <h5 className="card-title fw-bold">{place.name}</h5>
                                 <div className="d-flex gap-2 mb-3">
