@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getPrimaryImage } from '../utils/imageHelpers';
+import { getPrimaryImage, getImageList } from '../utils/imageHelpers';
+import DestinationDetailModal from './DestinationDetailModal';
 import { collection, getDocs, addDoc, query, where, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -1149,25 +1150,14 @@ function Destinations({ user, initialPlan }) {
                                   <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
                                 )}
                               </div>
-                              <div className="card-img-top" style={{ height: '200px', overflow: 'hidden', display: 'flex' }} onClick={(e) => { e.stopPropagation(); setSelectedPlaceDetails(place.raw || place); }}>
-                                {displayImages.length > 0 ? (
-                                  displayImages.map((src, i) => (
-                                    <img
-                                      key={i}
-                                      src={src}
-                                      alt={`${place.name} ${i + 1}`}
-                                      style={{ width: `${100 / displayImages.length}%`, height: '200px', objectFit: 'cover', opacity: isSelected ? 0.9 : 1 }}
-                                      onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://via.placeholder.com/600x400?text=No+Image'; }}
-                                    />
-                                  ))
-                                ) : (
-                                  <img
-                                    src={'https://via.placeholder.com/600x400?text=No+Image'}
-                                    alt={place.name}
-                                    style={{ width: '100%', height: '200px', objectFit: 'cover' }}
-                                  />
-                                )}
-                              </div>
+                              <img
+                                src={getPrimaryImage(place.raw || place)}
+                                alt={place.name}
+                                className="card-img-top"
+                                style={{ height: '200px', objectFit: 'cover', opacity: isSelected ? 0.9 : 1 }}
+                                onClick={(e) => { e.stopPropagation(); setSelectedPlaceDetails(place.raw || place); }}
+                                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://via.placeholder.com/600x400?text=No+Image'; }}
+                              />
                               <div className="card-body">
                                 <h5 className="card-title fw-bold">{place.name}</h5>
                                 <div className="d-flex gap-2 mb-3">
@@ -1335,74 +1325,7 @@ function Destinations({ user, initialPlan }) {
           )}
           {/* Place Detail Modal */}
           {selectedPlaceDetails && (
-            <div
-              className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-              style={{ zIndex: 1050, background: 'rgba(0,0,0,0.6)' }}
-              onClick={(e) => { if (e.target === e.currentTarget) setSelectedPlaceDetails(null); }}
-              role="dialog"
-              aria-modal="true"
-            >
-              <div className="bg-white shadow-lg rounded" style={{ width: '90%', maxWidth: '900px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
-                <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
-                  <div className="col-md-6 d-flex align-items-center justify-content-center" style={{ background: '#f8f9fa' }}>
-                    <img src={getPrimaryImage(selectedPlaceDetails)} alt={selectedPlaceDetails.name || selectedPlaceDetails.destinationName || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://via.placeholder.com/600x400?text=No+Image'; }} />
-                  </div>
-                  <div className="col-md-6 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
-                    <div className="d-flex justify-content-between align-items-start mb-2">
-                      <div>
-                        <h3 className="fw-bold mb-1">{selectedPlaceDetails.destinationName || selectedPlaceDetails.name || selectedPlaceDetails.name}</h3>
-                        <div className="text-muted small">{selectedPlaceDetails.cityName || selectedPlaceDetails.city || ''}{selectedPlaceDetails.regionName ? `, ${selectedPlaceDetails.regionName}` : ''}</div>
-                      </div>
-                      <div className="text-warning text-end">
-                        <div><i className="bi bi-star-fill"></i> {selectedPlaceDetails.rating || selectedPlaceDetails.raw?.rating || '—'}</div>
-                      </div>
-                    </div>
-                    <p className="text-muted small mb-3">{selectedPlaceDetails.description || selectedPlaceDetails.raw?.description || ''}</p>
-                    <div className="mb-3">
-                      {(selectedPlaceDetails.category || selectedPlaceDetails.tags || []).slice?.(0,5).map((tag, i) => (
-                        <span key={i} className="badge bg-light text-dark border me-1">{tag}</span>
-                      ))}
-                    </div>
-                    <div className="mt-auto">
-                      <div className="mb-3">
-                        <strong>Estimated Budget:</strong>
-                        <div className="text-muted small">{selectedPlaceDetails.budget || selectedPlaceDetails.raw?.budget || 'Varies'}</div>
-                      </div>
-                      <div className="card p-3 border">
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <div>
-                            <div className="small text-muted">Contact</div>
-                            <div className="fw-bold">{selectedPlaceDetails.hostName || selectedPlaceDetails.host || selectedPlaceDetails.raw?.hostName || 'Local Host'}</div>
-                          </div>
-                          <div className="text-end small text-muted">Info</div>
-                        </div>
-                        <div className="small mb-2">
-                          Phone: {selectedPlaceDetails.phone || selectedPlaceDetails.raw?.phone || 'Not provided'}
-                        </div>
-                        <div className="small mb-3">
-                          Email: {selectedPlaceDetails.email || selectedPlaceDetails.raw?.email || 'Not provided'}
-                        </div>
-                        <div className="d-flex gap-2">
-                          { (selectedPlaceDetails.phone || selectedPlaceDetails.raw?.phone) ? (
-                            <a className="btn btn-outline-primary btn-sm" href={`tel:${selectedPlaceDetails.phone || selectedPlaceDetails.raw?.phone}`}>Call</a>
-                          ) : (
-                            <button className="btn btn-outline-secondary btn-sm" disabled>Call</button>
-                          )}
-
-                          { (selectedPlaceDetails.email || selectedPlaceDetails.raw?.email) ? (
-                            <a className="btn btn-primary btn-sm" href={`mailto:${selectedPlaceDetails.email || selectedPlaceDetails.raw?.email}`}>Email</a>
-                          ) : (
-                            <button className="btn btn-secondary btn-sm" disabled>Email</button>
-                          )}
-
-                          <button className="btn btn-outline-dark btn-sm ms-auto" onClick={() => setSelectedPlaceDetails(null)}>Close</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <DestinationDetailModal dest={selectedPlaceDetails} onClose={() => setSelectedPlaceDetails(null)} />
           )}
           {/* Itinerary Modal */}
           {itineraryToShow && (

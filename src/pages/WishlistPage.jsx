@@ -3,7 +3,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import DestinationDetailModal from '../components/DestinationDetailModal';
 import { getPrimaryImage } from '../utils/imageHelpers';
-import { collection, query, where, getDocs, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 function WishlistPage({ user, onNavigate }) {
@@ -14,10 +14,38 @@ function WishlistPage({ user, onNavigate }) {
     if (!user) { setItems([]); setLoading(false); return; }
     setLoading(true);
     const q = query(collection(db, 'wishlists'), where('userId', '==', user.uid));
-    const unsub = onSnapshot(q, (snap) => {
-      const list = [];
-      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-      setItems(list);
+    const unsub = onSnapshot(q, async (snap) => {
+      const raw = [];
+      snap.forEach(d => raw.push({ id: d.id, ...d.data() }));
+
+      // For each wishlist item, try to fetch the authoritative admin destination doc
+      const enhanced = await Promise.all(raw.map(async (item) => {
+        const place = item.placeData || {};
+        const adminId = place?.id || place?.destinationId || item?.destinationId || item?.placeId || item?.adminId;
+        if (adminId) {
+          try {
+            const adminSnap = await getDoc(doc(db, 'destinations', adminId));
+            if (adminSnap && adminSnap.exists()) {
+              const admin = adminSnap.data() || {};
+              // Merge contact fields from admin into the place data, preferring place values when present
+              const merged = {
+                ...place,
+                hostName: place.hostName || admin.hostName || admin.host || admin.host_name,
+                phone: place.phone || admin.phone || admin.contactPhone || admin.contact_number,
+                email: place.email || admin.email || admin.contactEmail || admin.contact_email,
+                // ensure images come from admin if place has none
+                images: (place.images && place.images.length) ? place.images : (admin.images || (admin.imageUrl ? [admin.imageUrl] : []))
+              };
+              return { ...item, placeData: merged };
+            }
+          } catch (err) {
+            console.error('Failed to fetch admin destination for wishlist item', adminId, err);
+          }
+        }
+        return item;
+      }));
+
+      setItems(enhanced);
       setLoading(false);
     }, (err) => { console.error('Wishlist snapshot error', err); setLoading(false); });
 
