@@ -151,7 +151,7 @@ function Destinations({ user, initialPlan }) {
         setWishlistMap(map);
       }, err => console.error('wishlists listen', err));
     }
-    return () => { try { if (unsubWish) unsubWish(); } catch(e) {} };
+
     // Load admin-managed destinations used for dropdown / recommendations
     const loadAdminPlaces = async () => {
       try {
@@ -166,6 +166,8 @@ function Destinations({ user, initialPlan }) {
       }
     };
     loadAdminPlaces();
+
+    return () => { try { if (unsubWish) unsubWish(); } catch(e) {} };
   }, [user]);
 
   const baselineDays = 3; // baseline used to normalize daily cost (adjust as needed)
@@ -392,10 +394,16 @@ function Destinations({ user, initialPlan }) {
 
       // filter by per-pax budget: show destinations whose admin budget is <= budgetPerPax
       const paxNum = Math.max(1, Number(formData.pax) || 1);
-      // derive numeric budgetPerPax: prefer explicit field, otherwise compute from total budget
-      const budgetPerPaxNum = (formData.budgetPerPax === '' || formData.budgetPerPax == null)
-        ? (formData.budget === '' ? 0 : (Number(formData.budget) / paxNum))
-        : Number(formData.budgetPerPax);
+      // derive numeric budgetPerPax: prefer the computed baseBudgetPerPax (reflects latest total/pax),
+      // otherwise fall back to explicit form field or compute from total budget.
+      let budgetPerPaxNum = 0;
+      if (baseBudgetPerPax && Number(baseBudgetPerPax) > 0) {
+        budgetPerPaxNum = Number(baseBudgetPerPax);
+      } else if (formData.budgetPerPax !== '' && formData.budgetPerPax != null) {
+        budgetPerPaxNum = Number(formData.budgetPerPax) || 0;
+      } else {
+        budgetPerPaxNum = formData.budget === '' ? 0 : (Number(formData.budget) / paxNum);
+      }
 
       // exclude festival listings and those above per-pax budget
       const filteredPlaces = matches.filter(place => {
@@ -1145,6 +1153,7 @@ function Destinations({ user, initialPlan }) {
                                 className="card-img-top"
                                 style={{ height: '200px', objectFit: 'cover', opacity: isSelected ? 0.9 : 1 }}
                                 onClick={(e) => { e.stopPropagation(); setSelectedPlaceDetails(place.raw || place); }}
+                                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://via.placeholder.com/600x400?text=No+Image'; }}
                               />
                               <div className="card-body">
                                 <h5 className="card-title fw-bold">{place.name}</h5>
@@ -1284,6 +1293,7 @@ function Destinations({ user, initialPlan }) {
                                           alt={place.name}
                                           className="rounded"
                                           style={{ width: '60px', height: '60px', objectFit: 'cover' }}
+                                          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://via.placeholder.com/100x60?text=No+Image'; }}
                                         />
                                         <div className="ms-3 flex-grow-1">
                                           <h6 className="mb-1 small fw-bold">{place.name}</h6>
@@ -1322,7 +1332,7 @@ function Destinations({ user, initialPlan }) {
               <div className="bg-white shadow-lg rounded" style={{ width: '90%', maxWidth: '900px', maxHeight: '90vh', display: 'flex', overflow: 'hidden' }}>
                 <div className="row g-0" style={{ flex: 1, minHeight: '60vh' }}>
                   <div className="col-md-6 d-flex align-items-center justify-content-center" style={{ background: '#f8f9fa' }}>
-                    <img src={getPrimaryImage(selectedPlaceDetails)} alt={selectedPlaceDetails.name || selectedPlaceDetails.destinationName || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={getPrimaryImage(selectedPlaceDetails)} alt={selectedPlaceDetails.name || selectedPlaceDetails.destinationName || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://via.placeholder.com/600x400?text=No+Image'; }} />
                   </div>
                   <div className="col-md-6 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
                     <div className="d-flex justify-content-between align-items-start mb-2">
