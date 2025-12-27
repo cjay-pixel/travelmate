@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { getImageList, getPrimaryImage } from '../utils/imageHelpers';
-import { collection, /* getDocs, */ onSnapshot } from 'firebase/firestore';
+import { collection, /* getDocs, */ onSnapshot, addDoc, deleteDoc, query, where, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 // Recursively collect likely image URLs from an object
@@ -34,6 +34,7 @@ function SearchResultsPage({ user, onNavigate, searchQuery }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState(null);
+  const [wishlistMap, setWishlistMap] = useState({});
 
   useEffect(() => {
     // listen to admin destinations in real-time
@@ -83,6 +84,50 @@ function SearchResultsPage({ user, onNavigate, searchQuery }) {
 
     return () => { try { unsubscribe(); } catch (e) {} };
   }, []);
+
+  // wishlist listener for current user -> maps placeId => wishlistDocId
+  useEffect(() => {
+    if (!user) {
+      setWishlistMap({});
+      return;
+    }
+    const q = query(collection(db, 'wishlists'), where('userId', '==', user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      const map = {};
+      snap.forEach(d => {
+        try {
+          const pdata = d.data() || {};
+          if (pdata.placeId) map[pdata.placeId] = d.id;
+        } catch (e) {}
+      });
+      setWishlistMap(map);
+    }, (err) => {
+      console.error('Failed to listen to user wishlists:', err);
+    });
+
+    return () => { try { unsub(); } catch (e) {} };
+  }, [user]);
+
+  const toggleWishlist = async (place, e) => {
+    if (e) e.stopPropagation();
+    if (!user) { alert('Please log in to add to wishlist'); return; }
+    const placeId = place.id || place.raw?.id || place.placeId || place.name;
+    try {
+      if (wishlistMap[placeId]) {
+        await deleteDoc(doc(db, 'wishlists', wishlistMap[placeId]));
+      } else {
+        await addDoc(collection(db, 'wishlists'), {
+          userId: user.uid,
+          placeId,
+          placeData: place,
+          createdAt: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.error('Failed to toggle wishlist', err);
+      alert('Failed to update wishlist');
+    }
+  };
 
   useEffect(() => {
     if (!searchQuery) {
@@ -152,8 +197,15 @@ function SearchResultsPage({ user, onNavigate, searchQuery }) {
                     onClick={() => setSelectedDestination(dest)}
                     onKeyDown={(e) => { if (e.key === 'Enter') setSelectedDestination(dest); }}
                     className="card h-100 border-0 shadow-sm hover-shadow"
-                    style={{ transition: 'all 0.3s', cursor: 'pointer' }}
+                    style={{ transition: 'all 0.3s', cursor: 'pointer', position: 'relative' }}
                   >
+                    <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 30 }} onClick={(e) => { e.stopPropagation(); toggleWishlist(dest, e); }}>
+                      {wishlistMap[dest.id] ? (
+                        <button className="wishlist-btn wishlist-btn-sm active" title="Remove from wishlist"><i className="bi bi-heart-fill" /></button>
+                      ) : (
+                        <button className="wishlist-btn wishlist-btn-sm inactive" title="Add to wishlist"><i className="bi bi-heart" /></button>
+                      )}
+                    </div>
                     <ImageCarousel images={getImageList(dest)} height={'200px'} />
                     <div className="card-body">
                       <div className="d-flex justify-content-between align-items-start mb-2">

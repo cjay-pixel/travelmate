@@ -1143,7 +1143,7 @@ function Destinations({ user, initialPlan }) {
                                 </div>
                               )}
                               {/* wishlist heart */}
-                              <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 30 }} onClick={(e) => toggleWishlist(place, e)}>
+                              <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 30 }} onClick={(e) => toggleWishlist(place, e)}>
                                 {wishlistMap[(place.raw && place.raw.id) || place.id || place.name] ? (
                                   <button className="wishlist-btn wishlist-btn-sm active" title="Remove from wishlist"><i className="bi bi-heart-fill" /></button>
                                 ) : (
