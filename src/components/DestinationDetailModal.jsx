@@ -29,6 +29,15 @@ function ImageCarousel({ images = [], height = '100%', fit = 'contain' }) {
 export default function DestinationDetailModal({ dest, onClose, onOpenInPlanner }) {
   if (!dest) return null;
 
+  // helper to read common fields from wrappers (dest, dest.raw, dest.placeData)
+  const get = (key) => {
+    if (!dest) return undefined;
+    if (dest[key] !== undefined && dest[key] !== null) return dest[key];
+    if (dest.raw && dest.raw[key] !== undefined && dest.raw[key] !== null) return dest.raw[key];
+    if (dest.placeData && dest.placeData[key] !== undefined && dest.placeData[key] !== null) return dest.placeData[key];
+    return undefined;
+  };
+
   return (
     <div
       className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
@@ -45,18 +54,18 @@ export default function DestinationDetailModal({ dest, onClose, onOpenInPlanner 
           <div className="col-md-5 p-4 d-flex flex-column" style={{ maxHeight: '100%', overflowY: 'auto' }}>
             <div className="d-flex justify-content-between align-items-start mb-2">
               <div>
-                <h3 className="fw-bold mb-1">{dest.name}</h3>
-                <div className="text-muted small">{dest.cityName}{dest.regionName ? `, ${dest.regionName}` : ''}</div>
+                <h3 className="fw-bold mb-1">{get('name') || get('destinationName') || 'Unknown'}</h3>
+                <div className="text-muted small">{get('cityName') || get('city')}{(get('regionName') || get('region')) ? `, ${get('regionName') || get('region')}` : ''}</div>
               </div>
               <div className="text-warning text-end">
-                <div><i className="bi bi-star-fill"></i> {dest.rating}</div>
+                <div><i className="bi bi-star-fill"></i> {get('rating') || '—'}</div>
               </div>
             </div>
 
-            <p className="text-muted small mb-3">{dest.description}</p>
+            <p className="text-muted small mb-3">{get('description') || get('summary') || ''}</p>
 
             <div className="mb-3">
-              {(dest.tags || []).map((tag, idx) => (
+              {((get('tags') || get('category') || [])).map((tag, idx) => (
                 <span key={idx} className="badge bg-light text-dark border me-1">{tag}</span>
               ))}
             </div>
@@ -64,30 +73,30 @@ export default function DestinationDetailModal({ dest, onClose, onOpenInPlanner 
             <div className="mt-auto">
               <div className="mb-3">
                 <strong>Estimated Budget:</strong>
-                <div className="text-muted small">{(dest.estimatedCost && typeof dest.estimatedCost === 'number') ? `₱${dest.estimatedCost.toLocaleString()}` : (dest.budgetBreakdown ? 'See breakdown' : 'Varies')}</div>
+                <div className="text-muted small">{(get('estimatedCost') && typeof get('estimatedCost') === 'number') ? `₱${get('estimatedCost').toLocaleString()}` : (get('budgetBreakdown') ? 'See breakdown' : 'Varies')}</div>
               </div>
 
               <div className="card p-3 border">
                 <div className="d-flex justify-content-between align-items-center mb-2">
                   <div>
                     <div className="small text-muted">Contact</div>
-                    <div className="fw-bold">{dest.hostName || 'Local Host'}</div>
+                    <div className="fw-bold">{get('hostName') || get('host') || 'Local Host'}</div>
                   </div>
                   <div className="text-end small text-muted">Verified</div>
                 </div>
 
-                <div className="small mb-2">Phone: {dest.phone || 'Not provided'}</div>
-                <div className="small mb-3">Email: {dest.email || 'Not provided'}</div>
+                <div className="small mb-2">Phone: {get('phone') || get('contactPhone') || 'Not provided'}</div>
+                <div className="small mb-3">Email: {get('email') || get('contactEmail') || 'Not provided'}</div>
 
                 <div className="d-flex gap-2">
-                  { (dest.phone) ? (
-                    <a className="btn btn-outline-primary btn-sm" href={`tel:${dest.phone}`}>Call</a>
+                  { (get('phone') || get('contactPhone')) ? (
+                    <a className="btn btn-outline-primary btn-sm" href={`tel:${get('phone') || get('contactPhone')}`}>Call</a>
                   ) : (
                     <button className="btn btn-outline-secondary btn-sm" disabled>Call</button>
                   )}
 
-                  { (dest.email) ? (
-                    <a className="btn btn-primary btn-sm" href={`mailto:${dest.email}`}>Email</a>
+                  { (get('email') || get('contactEmail')) ? (
+                    <a className="btn btn-primary btn-sm" href={`mailto:${get('email') || get('contactEmail')}`}>Email</a>
                   ) : (
                     <button className="btn btn-secondary btn-sm" disabled>Email</button>
                   )}

@@ -14,42 +14,53 @@ export function getImageList(obj) {
     out.push(s);
   };
 
-  // 1) Prefer explicit images array (admin canonical source). Keep original order.
-  if (Array.isArray(obj.images) && obj.images.length) {
-    for (const it of obj.images) push(it);
-  }
+  // If object wraps the real place under common keys, prefer scanning those too
+  const nestedSources = [];
+  if (obj.raw && typeof obj.raw === 'object') nestedSources.push(obj.raw);
+  if (obj.placeData && typeof obj.placeData === 'object') nestedSources.push(obj.placeData);
 
-  // 2) Common single-image fields and numbered imageUrl fields (fallback)
-  const knownFields = ['image', 'imageUrl', 'photo', 'photoUrl', 'mainImage', 'coverImage'];
-  for (const f of knownFields) {
-    if (obj[f]) push(obj[f]);
-  }
-
-  // numbered fields like imageUrl1, imageUrl2, image1, image2
-  for (const k of Object.keys(obj)) {
-    if (/^image(url)?\d+$/i.test(k) || /^photo\d+$/i.test(k)) {
-      push(obj[k]);
+  // helper to gather images from an object (non-recursive except for known wrappers)
+  const gather = (o) => {
+    if (!o) return;
+    if (Array.isArray(o.images) && o.images.length) {
+      for (const it of o.images) push(it);
     }
-  }
 
-  // 3) Nested media arrays/objects
-  if (Array.isArray(obj.photos) && obj.photos.length) {
-    for (const p of obj.photos) push(p);
-  }
-  if (obj.media && Array.isArray(obj.media)) {
-    for (const m of obj.media) {
-      if (!m) continue;
-      if (typeof m === 'string') push(m);
-      else if (m.url) push(m.url);
-      else if (m.path) push(m.path);
+    // Common single-image fields and numbered imageUrl fields (fallback)
+    const knownFields = ['image', 'imageUrl', 'photo', 'photoUrl', 'mainImage', 'coverImage'];
+    for (const f of knownFields) {
+      if (o[f]) push(o[f]);
     }
-  }
 
-  // 4) Shallow scan for URL-like strings (last resort)
-  for (const k of Object.keys(obj)) {
-    const v = obj[k];
-    if (typeof v === 'string' && /(https?:)?\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(v)) push(v);
-  }
+    for (const k of Object.keys(o)) {
+      if (/^image(url)?\d+$/i.test(k) || /^photo\d+$/i.test(k)) {
+        push(o[k]);
+      }
+    }
+
+    if (Array.isArray(o.photos) && o.photos.length) {
+      for (const p of o.photos) push(p);
+    }
+    if (o.media && Array.isArray(o.media)) {
+      for (const m of o.media) {
+        if (!m) continue;
+        if (typeof m === 'string') push(m);
+        else if (m.url) push(m.url);
+        else if (m.path) push(m.path);
+      }
+    }
+
+    // Shallow scan for URL-like strings
+    for (const k of Object.keys(o)) {
+      const v = o[k];
+      if (typeof v === 'string' && /(https?:)?\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(v)) push(v);
+    }
+  };
+
+  // First gather from the main object
+  gather(obj);
+  // Then gather from common nested wrappers (preserve priority order)
+  for (const src of nestedSources) gather(src);
 
   // Return up to 3 images (admin requirement: show only up to three)
   return out.slice(0, 3);

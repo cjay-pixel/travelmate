@@ -1061,12 +1061,6 @@ function Destinations({ user, initialPlan }) {
                 </div>
 
                 {/* Submit Button */}
-                {suggestion && suggestion.minRequiredTotal > 0 && Number(formData.budget || 0) < suggestion.minRequiredTotal && (
-                  <div className="alert alert-warning">
-                    <strong>Budget may be low for {formData.destination || 'this destination'}</strong>. Recommended minimum: <strong>₱{suggestion.minRequiredTotal.toLocaleString()}</strong>. You can still get recommendations, but consider increasing your budget.
-                  </div>
-                )}
-
                 <button
                   type="submit"
                   className="btn btn-danger btn-lg w-100 py-3 fw-bold"
